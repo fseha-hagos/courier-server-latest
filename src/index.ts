@@ -52,15 +52,24 @@ app.post("/api/set-password", async (req, res): Promise<any> => {
   console.log("SET-PASSWORD: Session:", session);
 
   try {
-    const { newPassword } = req.body;
+    const { newPassword, newName } = req.body;
     if (!newPassword) {
       return res.status(400).json({ message: "New password is required" });
     }
 
-    await auth.api.setPassword({ body: { newPassword } });
+    await auth.api.setPassword({
+      body: { newPassword }, 
+      headers: fromNodeHeaders(req.headers),
+    });
 
-    console.log("Password successfully set");
-    return res.status(200).json({ message: "Password set successfully" });
+    await auth.api.updateUser({
+      body: { name: newName }, 
+      headers: fromNodeHeaders(req.headers),
+    });
+    return res.status(200).json({
+      success: true,
+      message: "Password set successfully",
+    });
   } catch (error) {
     console.error("Error setting password:", error);
     return res.status(500).json({ message: "Failed to set password" });
