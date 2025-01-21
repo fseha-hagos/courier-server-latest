@@ -15,11 +15,13 @@ export const auth = betterAuth({
     user: {
         modelName: "users",
         additionalFields: {
-            role: {
-                type: "string",
+            vehicles: {
+                type: "string[]",
                 required: false,
-                defaultValue: "user",
-                input: false // don't allow user to set role
+            },
+            deliveries: {
+                type: "string[]",
+                required: false,
             },
         }
     },

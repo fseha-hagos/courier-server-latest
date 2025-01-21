@@ -29,10 +29,13 @@ model Users {
   banExpires          String?
   sessions            Session[]
   accounts            Account[]
+  vehicles  Vehicle[]
+  deliveries Delivery[]
 
   @@unique([email])
   @@unique([phoneNumber])
   @@map("users")
+  Package Package[]
 }
 
 model Session {
@@ -78,4 +81,77 @@ model Verification {
   updatedAt  DateTime?
 
   @@map("verification")
+}
+
+
+
+model Vehicle {
+  id                 String   @id @default(uuid())
+  deliveryPersonId   String
+  deliveryPerson     Users     @relation(fields: [deliveryPersonId], references: [id])
+  type               String
+  licensePlate       String
+  maxWeight          Float
+  createdAt          DateTime @default(now())
+  deliveries         Delivery[]
+}
+
+model Location {
+  id                 String   @id @default(uuid())
+  formattedAddress   String
+  placeId            String   @unique
+  latitude           Float
+  longitude          Float
+  addressComponents  Json
+  createdAt          DateTime @default(now())
+  packagesPickup     Package[] @relation("PickupLocation")
+  packagesDelivery   Package[] @relation("DeliveryLocation")
+
+  Delivery Delivery[]
+}
+
+model Package {
+  id                String   @id @default(uuid())
+  customerId        String
+  customer          Users     @relation(fields: [customerId], references: [id])
+  description       String
+  weight            Float
+  pickupLocationId  String
+  deliveryLocationId String
+  pickupLocation    Location @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+  deliveryLocation  Location @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
+  status            PackageStatus
+  createdAt         DateTime @default(now())
+  delivery          Delivery?
+}
+
+enum PackageStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+model Delivery {
+  id                String   @id @default(uuid())
+  packageId         String @unique
+  package           Package  @relation(fields: [packageId], references: [id])
+  deliveryPersonId  String
+  deliveryPerson    Users    @relation(fields: [deliveryPersonId], references: [id])
+  vehicleId         String
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id])
+  pickupTime        DateTime?
+  deliveryTime      DateTime?
+  currentLocationId String?
+  currentLocation   Location? @relation(fields: [currentLocationId], references: [id])
+  status            DeliveryStatus
+  createdAt         DateTime @default(now())
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  DECLINED
 }
