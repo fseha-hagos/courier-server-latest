@@ -24,6 +24,9 @@ model Users {
   phoneNumber         String?
   phoneNumberVerified Boolean?
   role                String?
+  banned              Boolean?
+  banReason           String?
+  banExpires          String?
   sessions            Session[]
   accounts            Account[]
 
@@ -42,7 +45,7 @@ model Session {
   userAgent String?
   userId    String
   users     Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
+  impersonatedBy String?
   @@unique([token])
   @@map("session")
 }

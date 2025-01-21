@@ -4,6 +4,7 @@ import { db } from "src/utils/db";
 import { sendVerificationSms } from "src/utils/sms";
 import { phoneNumber, bearer } from "better-auth/plugins"
 import { fromNodeHeaders } from "better-auth/node";
+import { admin } from "better-auth/plugins"
 
 
 export const auth = betterAuth({
@@ -50,9 +51,14 @@ export const auth = betterAuth({
             //     if(request){
             //         const headers = fromNodeHeaders(Object.fromEntries(request.headers.entries()))
             //         console.log("Phone number verified: Request.headers", headers)
-                    
+
             //     }
             // },
+        }),
+        admin({
+            defaultRole: "customer",
+            adminRole: ["admin", "superAdmin"]
         })
+
     ]
 })
