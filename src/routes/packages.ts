@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createPackage, assignDeliveryPerson, getPackages, getPackageById, updatePackage, deletePackage } from '@controllers/package';
+import { createPackage, assignDeliveryPerson, getPackages, getPackageById, updatePackage, deletePackage } from '@controllers/packages.controller';
 
 const router = Router();
 

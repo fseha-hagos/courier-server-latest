@@ -1,88 +1,89 @@
 import express, { NextFunction, Request, Response } from "express";
 import dotenv from "dotenv";
-// import userRoutes from "./routes/user.route.js";
-// import authRoutes from "./routes/auth.route.js";
 import cookieParser from "cookie-parser";
-import path from "path";
+import cors from "cors";
+// import path from "path";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { auth } from "@utils/auth";
-import cors from "cors";
-import packageRoutes from './routes/package';
-
+import packageRoutes from "./routes/packages";
+import usersRouter from "@routes/users"; // User routes
+import deliveryRoutes from "./routes/deliveries"; // Deliveries routes
 
 dotenv.config();
 
-const __dirname = path.resolve();
-
 const app = express();
-app.use(cors({
-  origin: "http://localhost:5173", // Frontend URL
-  credentials: true, // Allow cookies and authorization headers
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed HTTP methods
-}))
-app.all("/api/auth/*", toNodeHandler(auth)); //Better-Auth Routes
 
-app.use(express.json());
-app.use(cookieParser());
-app.use('/packages', packageRoutes);
+// CORS setup
+app.use(
+  cors({
+    origin: "http://localhost:5173", // Frontend URL
+    credentials: true, // Allow cookies and authorization headers
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed HTTP methods
+  })
+);
 
-app.listen(3000, () => {
-  console.log("Server is running on port 3000!");
-});
+// Better-Auth routes (must come first)
+app.all("/api/auth/*", toNodeHandler(auth));
 
-// app.use("/api/user", userRoutes);
-// app.use("/api/auth", authRoutes);
+// Core middlewares
+app.use(express.json()); // Parse JSON requests
+app.use(cookieParser()); // Parse cookies
 
-app.use(express.static(path.join(__dirname, "/client/dist")));
+// Route handlers
+app.use("/packages", packageRoutes); // Package routes
+app.use("/users", usersRouter); // Users API
+app.use("/deliveries", deliveryRoutes); // Deliveries API
 
-app.get("/api/me", async (req, res) => {
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(req.headers),
-  });
-  console.log("Hello");
-  res.json(session);
-});
-
-app.post("/api/set-password", async (req, res): Promise<any> => {
-  console.log("Setting password");
-  const session = await auth.api.getSession({
-    headers: fromNodeHeaders(req.headers),
-  });
-  if (!session) {
-    console.error("No valid session found");
-    return res.status(401).json({ message: "Unauthorized: No session found" });
-  }
-  console.log("SET-PASSWORD: Session:", session);
-
+// API endpoints
+app.get("/me", async (req, res) => {
   try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    res.json(session);
+  } catch (error) {
+    console.error("Error fetching session:", error);
+    res.status(500).json({ message: "Failed to fetch session" });
+  }
+});
+
+app.post("/api/set-password", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers),
+    });
+    if (!session) {
+      res.status(401).json({ message: "Unauthorized: No session found" });
+      return;
+    }
+
     const { newPassword, newName } = req.body;
     if (!newPassword) {
-      return res.status(400).json({ message: "New password is required" });
+      res.status(400).json({ message: "New password is required" });
+      return;
     }
 
     await auth.api.setPassword({
-      body: { newPassword }, 
+      body: { newPassword },
       headers: fromNodeHeaders(req.headers),
     });
 
     await auth.api.updateUser({
-      body: { name: newName }, 
+      body: { name: newName },
       headers: fromNodeHeaders(req.headers),
     });
-    return res.status(200).json({
+
+    res.status(200).json({
       success: true,
       message: "Password set successfully",
     });
   } catch (error) {
     console.error("Error setting password:", error);
-    return res.status(500).json({ message: "Failed to set password" });
+    res.status(500).json({ message: "Failed to set password" });
   }
 });
 
-// app.get("*", (req, res) => {
-//   res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
-// });
-
+// Error handling middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
@@ -93,7 +94,8 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-
-
-
-
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}!`);
+});
