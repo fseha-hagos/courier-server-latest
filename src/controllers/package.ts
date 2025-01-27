@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from "src/utils/db";
+import calculateDistances from "@utils/distanceMatrix";
+
 
 // Get all packages
 export const getPackages = async (req: Request, res: Response): Promise<void> => {
@@ -103,10 +105,12 @@ export const deletePackage = async (req: Request, res: Response): Promise<void> 
 };
 
 // Assign the closest delivery person
-export const assignDeliveryPerson = async (req: Request<{ packageId: string }>, res: Response): Promise<void> => {
+// Assign the closest delivery person
+export const assignDeliveryPerson = async (req: Request, res: Response): Promise<void> => {
     try {
         const { packageId } = req.params;
 
+        // Fetch the package data with its pickup and delivery locations
         const packageData = await db.package.findUnique({
             where: { id: packageId },
             include: { pickupLocation: true, deliveryLocation: true },
@@ -117,6 +121,7 @@ export const assignDeliveryPerson = async (req: Request<{ packageId: string }>, 
             return;
         }
 
+        // Fetch available delivery persons who can carry the package
         const deliveryPersons = await db.users.findMany({
             where: {
                 role: 'DELIVERY_PERSON',
@@ -135,19 +140,61 @@ export const assignDeliveryPerson = async (req: Request<{ packageId: string }>, 
             return;
         }
 
-        const matchedDeliveryPerson = deliveryPersons[0];
+        // Prepare the coordinates for the pickup location
+        const pickupLocation = packageData.pickupLocation;
 
+        // Filter out delivery persons who have valid vehicle locations
+        const deliveryPersonsLocations = deliveryPersons
+            .map(person => {
+                const vehicle = person.vehicles[0];
+                // Check if the vehicle has valid lat and lng
+                if (vehicle.currentLatitude !== null && vehicle.currentLongitude !== null) {
+                    return {
+                        lat: vehicle.currentLatitude,
+                        lng: vehicle.currentLongitude,
+                    };
+                }
+                return null; // If no valid location, return null to skip this person
+            })
+            .filter(location => location !== null); // Remove null entries from the array
+
+        if (deliveryPersonsLocations.length === 0) {
+            res.status(404).json({ error: 'No delivery persons with valid locations' });
+            return;
+        }
+
+        // Calculate distances between the pickup location and all valid delivery persons
+        const distances = await calculateDistances(
+            [{ lat: pickupLocation.latitude, lng: pickupLocation.longitude }],  // Origins: Pickup location
+            deliveryPersonsLocations  // Destinations: Delivery persons' locations
+        );
+
+        // Find the closest delivery person by selecting the one with the smallest distance
+        let closestPersonIndex = 0;
+        let minDistance = Number.MAX_VALUE;
+        distances[0].forEach((distance, index) => {
+            if (distance.distance !== null && distance.distance < minDistance) {
+                minDistance = distance.distance;
+                closestPersonIndex = index;
+            }
+        });
+
+        // Select the closest delivery person
+        const closestDeliveryPerson = deliveryPersons[closestPersonIndex];
+
+        // Assign the delivery to the closest delivery person
         const delivery = await db.delivery.create({
             data: {
                 packageId,
-                deliveryPersonId: matchedDeliveryPerson.id,
-                vehicleId: matchedDeliveryPerson.vehicles[0].id,
+                deliveryPersonId: closestDeliveryPerson.id,
+                vehicleId: closestDeliveryPerson.vehicles[0].id,
                 status: 'ASSIGNED',
             },
         });
 
         res.status(201).json({ message: 'Delivery assigned', delivery });
     } catch (error: any) {
+        console.error('Error assigning delivery person:', error.message);
         res.status(500).json({ error: 'Failed to assign delivery person' });
     }
 };
