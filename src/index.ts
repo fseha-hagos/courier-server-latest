@@ -7,6 +7,8 @@ import path from "path";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { auth } from "@utils/auth";
 import cors from "cors";
+import packageRoutes from './routes/package';
+
 
 dotenv.config();
 
@@ -22,6 +24,7 @@ app.all("/api/auth/*", toNodeHandler(auth)); //Better-Auth Routes
 
 app.use(express.json());
 app.use(cookieParser());
+app.use('/packages', packageRoutes);
 
 app.listen(3000, () => {
   console.log("Server is running on port 3000!");
@@ -76,9 +79,9 @@ app.post("/api/set-password", async (req, res): Promise<any> => {
   }
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
-});
+// app.get("*", (req, res) => {
+//   res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
+// });
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;
