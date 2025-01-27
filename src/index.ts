@@ -30,9 +30,9 @@ app.use(express.json()); // Parse JSON requests
 app.use(cookieParser()); // Parse cookies
 
 // Route handlers
-app.use("/packages", packageRoutes); // Package routes
-app.use("/users", usersRouter); // Users API
-app.use("/deliveries", deliveryRoutes); // Deliveries API
+app.use("/api/packages", packageRoutes); // Package routes
+app.use("/api/users", usersRouter); // Users API
+app.use("/api/deliveries", deliveryRoutes); // Deliveries API
 
 // API endpoints
 app.get("/me", async (req, res) => {
@@ -82,6 +82,27 @@ app.post("/api/set-password", async (req: Request, res: Response): Promise<void>
     res.status(500).json({ message: "Failed to set password" });
   }
 });
+
+// New route to return all routes and their details
+app.get('/api/routes', (req: Request, res: Response) => {
+  const routes: any[] = [];
+
+  // Loop through each route in the app's stack
+  app._router.stack.forEach((middleware: any) => {
+    if (middleware.route) {
+      const routeDetails = {
+        method: Object.keys(middleware.route.methods)[0].toUpperCase(),
+        path: middleware.route.path,
+        // handler: middleware.route.stack.map((handler: any) => handler.name).join(', '),
+      };
+      routes.push(routeDetails);
+    }
+  });
+
+  // Send the routes list as JSON response
+  res.json(routes);
+});
+
 
 // Error handling middleware
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {

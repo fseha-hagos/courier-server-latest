@@ -118,25 +118,28 @@ model Location {
 }
 
 model Package {
-  id                 String        @id @default(uuid())
+  id                 String         @id @default(uuid())
   customerId         String
-  customer           Users         @relation(fields: [customerId], references: [id])
+  customer           Users          @relation(fields: [customerId], references: [id])
   description        String
   weight             Float
   pickupLocationId   String
   deliveryLocationId String
-  pickupLocation     Location      @relation("PickupLocation", fields: [pickupLocationId], references: [id])
-  deliveryLocation   Location      @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
-  status             PackageStatus
-  createdAt          DateTime      @default(now())
+  pickupLocation     Location       @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+  deliveryLocation   Location       @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
+  createdAt          DateTime       @default(now())
   delivery           Delivery?
+  labels             PackageLabel[]
 }
 
-enum PackageStatus {
-  PENDING
-  IN_TRANSIT
-  DELIVERED
-  CANCELLED
+// New model to handle package labels
+model PackageLabel {
+  id    String @id @default(uuid())
+  value String
+  label String
+
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
 }
 
 model Delivery {
