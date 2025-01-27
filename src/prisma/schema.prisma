@@ -13,6 +13,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserStatus {
+  ONLINE
+  OFFLINE
+}
+
 model Users {
   id                  String     @id
   name                String
@@ -32,6 +37,7 @@ model Users {
   vehicles            Vehicle[]
   deliveries          Delivery[]
   Package             Package[]
+  status              UserStatus @default(ONLINE) // New field
 
   @@unique([email])
   @@unique([phoneNumber])
@@ -91,8 +97,8 @@ model Vehicle {
   type             String
   licensePlate     String
   maxWeight        Float
-  currentLatitude  Float? 
-  currentLongitude Float? 
+  currentLatitude  Float?
+  currentLongitude Float?
   createdAt        DateTime   @default(now())
   deliveries       Delivery[]
 }

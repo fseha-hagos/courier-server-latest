@@ -126,6 +126,7 @@ export const assignDeliveryPerson = async (req: Request, res: Response): Promise
             where: {
                 role: 'DELIVERY_PERSON',
                 banned: false,
+                status: 'ONLINE', // Only include online delivery persons
                 vehicles: {
                     some: {
                         maxWeight: { gte: packageData.weight },
