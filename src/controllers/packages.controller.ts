@@ -57,7 +57,6 @@ export const createPackage = async (req: Request, res: Response): Promise<void> 
                 weight,
                 pickupLocationId,
                 deliveryLocationId,
-                status: 'PENDING',
             },
         });
 
