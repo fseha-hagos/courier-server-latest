@@ -8,34 +8,53 @@ import { auth } from "@utils/auth";
 import packageRoutes from "./routes/packages";
 import usersRouter from "@routes/users"; // User routes
 import deliveryRoutes from "./routes/deliveries"; // Deliveries routes
+import deliveryPersonRoutes from "./routes/delivery-persons"; // Delivery Persons routes
+import adminRoutes from "./routes/admin";
+import customerRoutes from "./routes/customers";
 
 dotenv.config();
 
 const app = express();
 
-// CORS setup
-app.use(
-  cors({
-    origin: "http://localhost:5173", // Frontend URL
-    credentials: true, // Allow cookies and authorization headers
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Allowed HTTP methods
-  })
-);
+// =========================================
+// Middleware Configuration
+// =========================================
 
-// Better-Auth routes (must come first)
+// CORS Configuration
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "http://localhost:5173",
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+};
+app.use(cors(corsOptions));
+
+// Better-Auth routes (must come before parsers)
 app.all("/api/auth/*", toNodeHandler(auth));
 
-// Core middlewares
-app.use(express.json()); // Parse JSON requests
-app.use(cookieParser()); // Parse cookies
+// Basic middleware
+app.use(express.json());
+app.use(cookieParser());
 
-// Route handlers
-app.use("/api/packages", packageRoutes); // Package routes
-app.use("/api/users", usersRouter); // Users API
-app.use("/api/deliveries", deliveryRoutes); // Deliveries API
+// =========================================
+// API Routes Configuration
+// =========================================
 
-// API endpoints
-app.get("/me", async (req, res) => {
+// User Management Routes
+app.use("/api/users", usersRouter);
+app.use("/api/admin", adminRoutes);
+app.use("/api/customers", customerRoutes);
+app.use("/api/delivery-persons", deliveryPersonRoutes);
+
+// Business Logic Routes
+app.use("/api/packages", packageRoutes);
+app.use("/api/deliveries", deliveryRoutes);
+
+// =========================================
+// Authentication Routes
+// =========================================
+
+// Get current user session
+app.get("/me", async (req: Request, res: Response) => {
   try {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
@@ -43,80 +62,109 @@ app.get("/me", async (req, res) => {
     res.json(session);
   } catch (error) {
     console.error("Error fetching session:", error);
-    res.status(500).json({ message: "Failed to fetch session" });
+    res.status(500).json({ success: false, message: "Failed to fetch session" });
   }
 });
 
+// Set user password and update profile
 app.post("/api/set-password", async (req: Request, res: Response): Promise<void> => {
   try {
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
     });
+    
     if (!session) {
-      res.status(401).json({ message: "Unauthorized: No session found" });
+      res.status(401).json({ success: false, message: "Unauthorized: No session found" });
       return;
     }
 
     const { newPassword, newName } = req.body;
+    
     if (!newPassword) {
-      res.status(400).json({ message: "New password is required" });
+      res.status(400).json({ success: false, message: "New password is required" });
       return;
     }
 
-    await auth.api.setPassword({
-      body: { newPassword },
-      headers: fromNodeHeaders(req.headers),
-    });
-
-    await auth.api.updateUser({
-      body: { name: newName },
-      headers: fromNodeHeaders(req.headers),
-    });
+    await Promise.all([
+      auth.api.setPassword({
+        body: { newPassword },
+        headers: fromNodeHeaders(req.headers),
+      }),
+      auth.api.updateUser({
+        body: { name: newName },
+        headers: fromNodeHeaders(req.headers),
+      }),
+    ]);
 
     res.status(200).json({
       success: true,
-      message: "Password set successfully",
+      message: "Password and profile updated successfully",
     });
   } catch (error) {
-    console.error("Error setting password:", error);
-    res.status(500).json({ message: "Failed to set password" });
+    console.error("Error updating user profile:", error);
+    res.status(500).json({ success: false, message: "Failed to update user profile" });
   }
 });
 
-// New route to return all routes and their details
-app.get('/api/routes', (req: Request, res: Response) => {
-  const routes: any[] = [];
+// =========================================
+// Development Routes
+// =========================================
 
-  // Loop through each route in the app's stack
-  app._router.stack.forEach((middleware: any) => {
-    if (middleware.route) {
-      const routeDetails = {
-        method: Object.keys(middleware.route.methods)[0].toUpperCase(),
-        path: middleware.route.path,
-        // handler: middleware.route.stack.map((handler: any) => handler.name).join(', '),
-      };
-      routes.push(routeDetails);
-    }
+// List all available routes (development only)
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/routes', (req: Request, res: Response) => {
+    const routes: Array<{ method: string; path: string }> = [];
+    
+    app._router.stack.forEach((middleware: any) => {
+      if (middleware.route) {
+        routes.push({
+          method: Object.keys(middleware.route.methods)[0].toUpperCase(),
+          path: middleware.route.path,
+        });
+      }
+    });
+    
+    res.json(routes);
   });
+}
 
-  // Send the routes list as JSON response
-  res.json(routes);
-});
+// =========================================
+// Error Handling
+// =========================================
 
-
-// Error handling middleware
+// Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Global error:', err);
+  
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
+  
   res.status(statusCode).json({
     success: false,
     statusCode,
     message,
+    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
   });
 });
 
-// Start the server
+// 404 handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    message: "Route not found",
+  });
+});
+
+// =========================================
+// Server Startup
+// =========================================
+
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}!`);
+  console.log(`
+🚀 Server is running on port ${PORT}
+📱 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:5173"}
+🔒 Environment: ${process.env.NODE_ENV || "development"}
+  `);
 });

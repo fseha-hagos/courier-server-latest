@@ -103,33 +103,67 @@ model Vehicle {
   deliveries       Delivery[]
 }
 
+enum LocationType {
+  PICKUP
+  DELIVERY
+  WAYPOINT
+}
+
 model Location {
-  id                String    @id @default(uuid())
-  formattedAddress  String
-  placeId           String    @unique
+  id                String            @id @default(uuid())
+  placeId           String            @unique
+  address           String
+  name              String?
+  type              LocationType
   latitude          Float
   longitude         Float
-  addressComponents Json
-  createdAt         DateTime  @default(now())
-  packagesPickup    Package[] @relation("PickupLocation")
-  packagesDelivery  Package[] @relation("DeliveryLocation")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  packagesPickup    Package[]         @relation("PickupLocation")
+  packagesDelivery  Package[]         @relation("DeliveryLocation")
+  locationHistory   LocationHistory[]
+  Delivery          Delivery[]
+}
 
-  Delivery Delivery[]
+model LocationHistory {
+  id            String    @id @default(uuid())
+  packageId     String
+  package       Package   @relation(fields: [packageId], references: [id])
+  locationId    String
+  location      Location  @relation(fields: [locationId], references: [id])
+  timestamp     DateTime  @default(now())
+  status        String    // PICKED_UP, IN_TRANSIT, DELIVERED
+  currentLat    Float?
+  currentLng    Float?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([packageId])
+  @@index([locationId])
+  @@index([timestamp])
 }
 
 model Package {
-  id                 String         @id @default(uuid())
+  id                 String           @id @default(uuid())
   customerId         String
-  customer           Users          @relation(fields: [customerId], references: [id])
+  customer           Users            @relation(fields: [customerId], references: [id])
   description        String
   weight             Float
   pickupLocationId   String
   deliveryLocationId String
-  pickupLocation     Location       @relation("PickupLocation", fields: [pickupLocationId], references: [id])
-  deliveryLocation   Location       @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
-  createdAt          DateTime       @default(now())
+  pickupLocation     Location         @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+  deliveryLocation   Location         @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  deletedAt          DateTime?        // Soft delete timestamp
+  deleted            Boolean          @default(false)  // Soft delete flag
   delivery           Delivery?
   labels             PackageLabel[]
+  locationHistory    LocationHistory[]
+
+  @@index([customerId])
+  @@index([pickupLocationId])
+  @@index([deliveryLocationId])
 }
 
 // New model to handle package labels

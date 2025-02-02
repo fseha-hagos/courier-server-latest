@@ -1,68 +1,220 @@
 import { Request, Response } from 'express';
-import { db } from "src/utils/db";
+import { db } from "@utils/db";
+import { locationService, LocationStatus } from "@utils/location";
 import calculateDistances from "@utils/distanceMatrix";
-
+import { DeliveryStatus } from '@prisma/client';
 
 // Get all packages
 export const getPackages = async (req: Request, res: Response): Promise<void> => {
     try {
         const packages = await db.package.findMany({
+            where: {
+                deleted: false
+            },
             include: {
                 pickupLocation: true,
                 deliveryLocation: true,
-                delivery: true,
+                delivery: {
+                    include: {
+                        deliveryPerson: true,
+                        vehicle: true
+                    }
+                },
+                labels: true,
             },
         });
-        res.status(200).json(packages);
+
+        // Fetch latest location history for each package
+        const packagesWithHistory = await Promise.all(
+            packages.map(async (pkg) => {
+                const history = await locationService.getPackageLocationHistory(pkg.id);
+                return {
+                    ...pkg,
+                    currentLocation: history[0] || null
+                };
+            })
+        );
+
+        res.status(200).json({ success: true, packages: packagesWithHistory });
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error('Error fetching packages:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 
 // Get a single package by ID
 export const getPackageById = async (req: Request, res: Response): Promise<void> => {
     try {
-        const pkg = await db.package.findUnique({
-            where: { id: req.params.id },
+        const pkg = await db.package.findFirst({
+            where: { 
+                id: req.params.id,
+                deleted: false
+            },
             include: {
                 pickupLocation: true,
                 deliveryLocation: true,
-                delivery: true,
+                delivery: {
+                    include: {
+                        deliveryPerson: true,
+                        vehicle: true
+                    }
+                },
+                labels: true,
             },
         });
+
         if (!pkg) {
-            res.status(404).json({ message: 'Package not found' });
+            res.status(404).json({ success: false, error: 'Package not found' });
             return;
         }
-        res.status(200).json(pkg);
+
+        // Fetch location history
+        const locationHistory = await locationService.getPackageLocationHistory(pkg.id);
+
+        res.status(200).json({
+            success: true,
+            package: {
+                ...pkg,
+                locationHistory
+            }
+        });
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error('Error fetching package:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 
 // Create a new package
 export const createPackage = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { customerId, description, weight, pickupLocationId, deliveryLocationId } = req.body;
+        console.log('[Package Creation Started]', {
+            timestamp: new Date().toISOString(),
+            body: {
+                ...req.body,
+                customerId: req.body.customerId ? '[PRESENT]' : '[MISSING]'
+            }
+        });
 
-        if (!customerId || !description || !weight || !pickupLocationId || !deliveryLocationId) {
-            res.status(400).json({ message: 'All fields are required' });
+        const {
+            customerId,
+            description,
+            weight,
+            pickup,
+            delivery,
+            labels
+        } = req.body;
+
+        // Validate required fields
+        if (!customerId || !description || !weight || !pickup || !delivery) {
+            console.log('[Package Creation Failed] Missing required fields:', {
+                hasCustomerId: !!customerId,
+                hasDescription: !!description,
+                hasWeight: !!weight,
+                hasPickup: !!pickup,
+                hasDelivery: !!delivery
+            });
+            res.status(400).json({ success: false, error: 'All fields are required' });
             return;
         }
 
-        const newPackage = await db.package.create({
-            data: {
-                customerId,
-                description,
-                weight,
-                pickupLocationId,
-                deliveryLocationId,
-            },
-        });
+        // Validate weight
+        if (weight <= 0) {
+            console.log('[Package Creation Failed] Invalid weight:', { weight });
+            res.status(400).json({ success: false, error: 'Weight must be greater than 0' });
+            return;
+        }
 
-        res.status(201).json(newPackage);
+        console.log('[Package Creation] Validating locations');
+
+        // Validate and create/get locations
+        try {
+            // Validate locations
+            const [validatedPickup, validatedDelivery] = await Promise.all([
+                locationService.validateLocation(pickup.placeId),
+                locationService.validateLocation(delivery.placeId)
+            ]);
+
+            console.log('[Package Creation] Locations validated successfully:', {
+                pickup: {
+                    placeId: validatedPickup.placeId,
+                    address: validatedPickup.address
+                },
+                delivery: {
+                    placeId: validatedDelivery.placeId,
+                    address: validatedDelivery.address
+                }
+            });
+
+            // Create or get locations
+            const [pickupLocation, deliveryLocation] = await Promise.all([
+                locationService.createOrGetLocation({
+                    ...validatedPickup,
+                    type: 'PICKUP'
+                }),
+                locationService.createOrGetLocation({
+                    ...validatedDelivery,
+                    type: 'DELIVERY'
+                })
+            ]);
+
+            console.log('[Package Creation] Locations created/retrieved successfully:', {
+                pickupId: pickupLocation.id,
+                deliveryId: deliveryLocation.id
+            });
+
+            // Create package with locations
+            const newPackage = await db.package.create({
+                data: {
+                    customerId,
+                    description,
+                    weight,
+                    pickupLocationId: pickupLocation.id,
+                    deliveryLocationId: deliveryLocation.id,
+                    labels: labels ? {
+                        create: labels.map((label: { value: string; label: string }) => ({
+                            value: label.value,
+                            label: label.label
+                        }))
+                    } : undefined
+                },
+                include: {
+                    pickupLocation: true,
+                    deliveryLocation: true,
+                    labels: true
+                }
+            });
+
+            console.log('[Package Creation] Package created successfully:', {
+                packageId: newPackage.id,
+                hasLabels: labels ? labels.length : 0
+            });
+
+            // Initialize location history
+            await locationService.addLocationHistory(
+                newPackage.id,
+                pickupLocation.id,
+                LocationStatus.PICKED_UP
+            );
+
+            console.log('[Package Creation] Location history initialized');
+
+            res.status(201).json({ success: true, package: newPackage });
+        } catch (error: any) {
+            console.error('[Package Creation] Location validation/creation failed:', {
+                error: error.message,
+                stack: error.stack,
+                pickupPlaceId: pickup?.placeId,
+                deliveryPlaceId: delivery?.placeId
+            });
+            throw error;
+        }
     } catch (error: any) {
-        res.status(400).json({ message: error.message });
+        console.error('[Package Creation] Failed:', {
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString()
+        });
+        res.status(400).json({ success: false, error: error.message });
     }
 };
 
@@ -85,21 +237,125 @@ export const updatePackage = async (req: Request, res: Response): Promise<void> 
     }
 };
 
-// Delete a package
+// Delete a package (soft delete)
 export const deletePackage = async (req: Request, res: Response): Promise<void> => {
     try {
-        const deletedPackage = await db.package.delete({
-            where: { id: req.params.id },
+        console.log('[Package Deletion] Attempting to delete package:', req.params.id);
+
+        const existingPackage = await db.package.findFirst({
+            where: { 
+                id: req.params.id,
+                deleted: false
+            },
+            include: {
+                delivery: true
+            }
         });
 
-        if (!deletedPackage) {
-            res.status(404).json({ message: 'Package not found' });
+        if (!existingPackage) {
+            console.log('[Package Deletion] Package not found or already deleted:', req.params.id);
+            res.status(404).json({ success: false, error: 'Package not found' });
             return;
         }
 
-        res.status(200).json({ message: 'Package deleted successfully' });
+        // Check if package can be deleted (e.g., not in active delivery)
+        if (existingPackage.delivery?.status === DeliveryStatus.IN_PROGRESS) {
+            console.log('[Package Deletion] Cannot delete package in active delivery:', req.params.id);
+            res.status(400).json({ 
+                success: false, 
+                error: 'Cannot delete package that is in active delivery' 
+            });
+            return;
+        }
+
+        // Perform soft delete
+        const deletedPackage = await db.package.update({
+            where: { id: req.params.id },
+            data: {
+                deleted: true,
+                deletedAt: new Date()
+            },
+            include: {
+                delivery: true,
+                pickupLocation: true,
+                deliveryLocation: true,
+                labels: true
+            }
+        });
+
+        console.log('[Package Deletion] Successfully soft deleted package:', {
+            packageId: deletedPackage.id,
+            deletedAt: deletedPackage.deletedAt
+        });
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Package deleted successfully',
+            package: deletedPackage
+        });
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error('[Package Deletion] Error:', {
+            packageId: req.params.id,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Restore a deleted package
+export const restorePackage = async (req: Request, res: Response): Promise<void> => {
+    try {
+        console.log('[Package Restoration] Attempting to restore package:', req.params.id);
+
+        const existingPackage = await db.package.findFirst({
+            where: { 
+                id: req.params.id,
+                deleted: true
+            },
+            include: {
+                delivery: true,
+                pickupLocation: true,
+                deliveryLocation: true,
+                labels: true
+            }
+        });
+
+        if (!existingPackage) {
+            console.log('[Package Restoration] Package not found or not deleted:', req.params.id);
+            res.status(404).json({ success: false, error: 'Deleted package not found' });
+            return;
+        }
+
+        // Restore package
+        const restoredPackage = await db.package.update({
+            where: { id: req.params.id },
+            data: {
+                deleted: false,
+                deletedAt: null
+            },
+            include: {
+                delivery: true,
+                pickupLocation: true,
+                deliveryLocation: true,
+                labels: true
+            }
+        });
+
+        console.log('[Package Restoration] Successfully restored package:', restoredPackage.id);
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Package restored successfully',
+            package: restoredPackage
+        });
+    } catch (error: any) {
+        console.error('[Package Restoration] Error:', {
+            packageId: req.params.id,
+            error: error.message,
+            stack: error.stack
+        });
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 
@@ -196,6 +452,73 @@ export const assignDeliveryPerson = async (req: Request, res: Response): Promise
     } catch (error: any) {
         console.error('Error assigning delivery person:', error.message);
         res.status(500).json({ error: 'Failed to assign delivery person' });
+    }
+};
+
+// Update package location
+export const updatePackageLocation = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { locationId, status, currentCoords } = req.body;
+
+        // Add new location history entry
+        const locationHistory = await locationService.addLocationHistory(
+            id,
+            locationId,
+            status,
+            currentCoords
+        );
+
+        res.status(200).json({ success: true, locationHistory });
+    } catch (error: any) {
+        console.error('Error updating package location:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Get all deleted packages
+export const getDeletedPackages = async (req: Request, res: Response): Promise<void> => {
+    try {
+        console.log('[Deleted Packages] Fetching all deleted packages');
+        
+        const deletedPackages = await db.package.findMany({
+            where: {
+                deleted: true
+            },
+            include: {
+                pickupLocation: true,
+                deliveryLocation: true,
+                delivery: {
+                    include: {
+                        deliveryPerson: true,
+                        vehicle: true
+                    }
+                },
+                labels: true,
+            },
+        });
+
+        // Fetch latest location history for each package
+        const packagesWithHistory = await Promise.all(
+            deletedPackages.map(async (pkg) => {
+                const history = await locationService.getPackageLocationHistory(pkg.id);
+                return {
+                    ...pkg,
+                    currentLocation: history[0] || null
+                };
+            })
+        );
+
+        console.log('[Deleted Packages] Found', deletedPackages.length, 'deleted packages');
+
+        res.status(200).json({ 
+            success: true, 
+            packages: packagesWithHistory,
+            count: deletedPackages.length
+        });
+    } catch (error: any) {
+        console.error('[Deleted Packages] Error fetching deleted packages:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 };
 
