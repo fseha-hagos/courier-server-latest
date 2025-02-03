@@ -37,7 +37,15 @@ model Users {
   vehicles            Vehicle[]
   deliveries          Delivery[]
   Package             Package[]
-  status              UserStatus @default(ONLINE) // New field
+  status              UserStatus @default(ONLINE)
+  averageRating       Float?     @default(0)
+  completedDeliveries Int        @default(0)
+  failedDeliveries    Int        @default(0)
+  deliveryNotes       DeliveryNote[]
+  sentMessages        ChatMessage[]     @relation("SentMessages")
+  readMessages        ChatMessageRead[]
+  cancellations       Cancellation[]
+  packageNotes        PackageNote[]
 
   @@unique([email])
   @@unique([phoneNumber])
@@ -123,6 +131,7 @@ model Location {
   packagesDelivery  Package[]         @relation("DeliveryLocation")
   locationHistory   LocationHistory[]
   Delivery          Delivery[]
+  deliveryNotes     DeliveryNote[]
 }
 
 model LocationHistory {
@@ -143,6 +152,15 @@ model LocationHistory {
   @@index([timestamp])
 }
 
+enum PackageStatus {
+  PENDING
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
 model Package {
   id                 String           @id @default(uuid())
   customerId         String
@@ -153,6 +171,10 @@ model Package {
   deliveryLocationId String
   pickupLocation     Location         @relation("PickupLocation", fields: [pickupLocationId], references: [id])
   deliveryLocation   Location         @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
+  status             PackageStatus    @default(PENDING)
+  pricing            PackagePricing?
+  timeline           PackageTimeline?
+  cancellation       Cancellation?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
   deletedAt          DateTime?        // Soft delete timestamp
@@ -160,10 +182,165 @@ model Package {
   delivery           Delivery?
   labels             PackageLabel[]
   locationHistory    LocationHistory[]
+  notes              PackageNote[]
 
   @@index([customerId])
   @@index([pickupLocationId])
   @@index([deliveryLocationId])
+  @@index([status])
+  Dispute Dispute[]
+  ChatMessage ChatMessage[]
+}
+
+model PackagePricing {
+  id            String   @id @default(uuid())
+  packageId     String   @unique
+  package       Package  @relation(fields: [packageId], references: [id])
+  basePrice     Float
+  distance      Float
+  weightCharge  Float
+  urgentCharge  Float?
+  totalPrice    Float
+  currency      String   @default("USD")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PackageTimeline {
+  id           String    @id @default(uuid())
+  packageId    String    @unique
+  package      Package   @relation(fields: [packageId], references: [id])
+  created      DateTime  @default(now())
+  assigned     DateTime?
+  pickupReady  DateTime?
+  pickedUp     DateTime?
+  inTransit    DateTime?
+  arriving     DateTime?
+  delivered    DateTime?
+  failed       DateTime?
+  cancelled    DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+model Cancellation {
+  id           String    @id @default(uuid())
+  packageId    String    @unique
+  package      Package   @relation(fields: [packageId], references: [id])
+  timestamp    DateTime  @default(now())
+  reason       String
+  canceledById String
+  canceledBy   Users     @relation(fields: [canceledById], references: [id])
+  canceledByType String  // CUSTOMER, DELIVERY_PERSON, ADMIN
+  refundAmount Float
+  penaltyFee   Float
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Dispute {
+  id                String    @id @default(uuid())
+  packageId         String    @unique
+  package           Package   @relation(fields: [packageId], references: [id])
+  type              String    // DAMAGE, DELAY, BEHAVIOR, OTHER
+  description       String
+  evidenceUrls      String[]
+  preferredResolution String?
+  status            String    @default("PENDING") // PENDING, IN_REVIEW, RESOLVED
+  resolution        String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  resolvedAt        DateTime?
+}
+
+model PackageNote {
+  id        String   @id @default(uuid())
+  packageId String
+  package   Package  @relation(fields: [packageId], references: [id])
+  message   String
+  type      String   // INTERNAL, CUSTOMER_VISIBLE, DELIVERY_PERSON_VISIBLE
+  priority  String?  // LOW, MEDIUM, HIGH
+  createdBy String
+  author    Users    @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([packageId])
+  @@index([createdBy])
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  packageId String
+  package   Package  @relation(fields: [packageId], references: [id])
+  fromId    String
+  from      Users    @relation("SentMessages", fields: [fromId], references: [id])
+  fromType  String   // CUSTOMER, DELIVERY_PERSON, SUPPORT
+  message   String
+  readBy    ChatMessageRead[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([packageId])
+  @@index([fromId])
+}
+
+model ChatMessageRead {
+  id        String   @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id])
+  userId    String
+  user      Users    @relation(fields: [userId], references: [id])
+  readAt    DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model Delivery {
+  id                    String         @id @default(uuid())
+  packageId             String         @unique
+  package               Package        @relation(fields: [packageId], references: [id])
+  deliveryPersonId      String
+  deliveryPerson        Users          @relation(fields: [deliveryPersonId], references: [id])
+  vehicleId             String
+  vehicle               Vehicle        @relation(fields: [vehicleId], references: [id])
+  pickupTime            DateTime?
+  deliveryTime          DateTime?
+  estimatedDeliveryTime DateTime?
+  currentLocationId     String?
+  currentLocation       Location?      @relation(fields: [currentLocationId], references: [id])
+  status                DeliveryStatus
+  createdAt             DateTime       @default(now())
+  notes                 DeliveryNote[]
+  deliveryRating       Float?         // Rating given by customer
+}
+
+enum DeliveryStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  DECLINED
+}
+
+// New model for delivery notes and history
+model DeliveryNote {
+  id            String   @id @default(uuid())
+  deliveryId    String
+  delivery      Delivery @relation(fields: [deliveryId], references: [id])
+  actorId       String
+  actor         Users    @relation(fields: [actorId], references: [id])
+  note          String
+  timestamp     DateTime @default(now())
+  actorType     String   // CUSTOMER, DELIVERY_PERSON, ADMIN
+  locationId    String?
+  location      Location? @relation(fields: [locationId], references: [id])
+
+  @@index([deliveryId])
+  @@index([actorId])
+  @@index([locationId])
 }
 
 // New model to handle package labels
@@ -174,28 +351,4 @@ model PackageLabel {
 
   packageId String
   package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
-}
-
-model Delivery {
-  id                String         @id @default(uuid())
-  packageId         String         @unique
-  package           Package        @relation(fields: [packageId], references: [id])
-  deliveryPersonId  String
-  deliveryPerson    Users          @relation(fields: [deliveryPersonId], references: [id])
-  vehicleId         String
-  vehicle           Vehicle        @relation(fields: [vehicleId], references: [id])
-  pickupTime        DateTime?
-  deliveryTime      DateTime?
-  currentLocationId String?
-  currentLocation   Location?      @relation(fields: [currentLocationId], references: [id])
-  status            DeliveryStatus
-  createdAt         DateTime       @default(now())
-}
-
-enum DeliveryStatus {
-  ASSIGNED
-  IN_PROGRESS
-  COMPLETED
-  FAILED
-  DECLINED
 }

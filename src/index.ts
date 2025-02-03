@@ -2,9 +2,11 @@ import express, { NextFunction, Request, Response } from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import { createServer } from 'http';
 // import path from "path";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
 import { auth } from "@utils/auth";
+import { initializeWebSocket } from "@utils/websocket";
 import packageRoutes from "./routes/packages";
 import usersRouter from "@routes/users"; // User routes
 import deliveryRoutes from "./routes/deliveries"; // Deliveries routes
@@ -15,6 +17,10 @@ import customerRoutes from "./routes/customers";
 dotenv.config();
 
 const app = express();
+const server = createServer(app);
+
+// Initialize WebSocket
+initializeWebSocket(server);
 
 // =========================================
 // Middleware Configuration
@@ -161,7 +167,7 @@ app.use((req: Request, res: Response) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`
 🚀 Server is running on port ${PORT}
 📱 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:5173"}
