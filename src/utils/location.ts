@@ -1,11 +1,12 @@
 import { Client } from '@googlemaps/google-maps-services-js';
 import { db } from './db';
 import { Prisma, Location, LocationType } from '@prisma/client';
+import { config } from './config';
 
 const client = new Client({});
 
-// Get API key from environment variables
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+// Get API key from config
+const GOOGLE_MAPS_API_KEY = config.googleMapsApiKey;
 
 if (!GOOGLE_MAPS_API_KEY) {
   console.error('GOOGLE_MAPS_API_KEY is not set in environment variables');
