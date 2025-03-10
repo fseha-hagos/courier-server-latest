@@ -8,12 +8,12 @@ import { auth } from "@utils/auth";
 import { initializeWebSocket } from "@utils/websocket";
 import { config } from "@utils/config";
 import { swaggerSpec, swaggerUiOptions } from "@utils/swagger";
-import packageRoutes from "./routes/packages";
+import packagesRouter from "@routes/packages";
 import usersRouter from "@routes/users"; // User routes
-import deliveryRoutes from "./routes/deliveries"; // Deliveries routes
-import deliveryPersonRoutes from "./routes/delivery-persons"; // Delivery Persons routes
-import adminRoutes from "./routes/admin";
-import customerRoutes from "./routes/customers";
+import deliveriesRouter from "@routes/deliveries"; // Deliveries routes
+import deliveryPersonsRouter from "@routes/delivery-persons"; // Delivery Persons routes
+import adminRouter from "@routes/admin";
+import customersRouter from "@routes/customers";
 
 const app = express();
 const server = createServer(app);
@@ -53,13 +53,13 @@ app.use(cookieParser());
 
 // User Management Routes
 app.use("/api/users", usersRouter);
-app.use("/api/admin", adminRoutes);
-app.use("/api/customers", customerRoutes);
-app.use("/api/delivery-persons", deliveryPersonRoutes);
+app.use("/api/admin", adminRouter);
+app.use("/api/customers", customersRouter);
+app.use("/api/delivery-persons", deliveryPersonsRouter);
 
 // Business Logic Routes
-app.use("/api/packages", packageRoutes);
-app.use("/api/deliveries", deliveryRoutes);
+app.use("/api/packages", packagesRouter);
+app.use("/api/deliveries", deliveriesRouter);
 
 // =========================================
 // Authentication Routes
