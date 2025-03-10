@@ -257,7 +257,7 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  *         name: radius
  *         schema:
  *           type: number
- *         description: Search radius in meters (default: 5000)
+ *         description: Search radius in meters
  *     responses:
  *       200:
  *         description: List of nearby delivery persons
