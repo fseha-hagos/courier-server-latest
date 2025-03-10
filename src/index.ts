@@ -3,9 +3,11 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import { createServer } from 'http';
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
+import swaggerUi from 'swagger-ui-express';
 import { auth } from "@utils/auth";
 import { initializeWebSocket } from "@utils/websocket";
 import { config } from "@utils/config";
+import { swaggerSpec, swaggerUiOptions } from "@utils/swagger";
 import packageRoutes from "./routes/packages";
 import usersRouter from "@routes/users"; // User routes
 import deliveryRoutes from "./routes/deliveries"; // Deliveries routes
@@ -30,6 +32,13 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 };
 app.use(cors(corsOptions));
+
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+app.get('/api-docs.json', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
 
 // Better-Auth routes (must come before parsers)
 app.all("/api/auth/*", toNodeHandler(auth));

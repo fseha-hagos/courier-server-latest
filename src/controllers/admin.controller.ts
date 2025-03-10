@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import { db } from '@utils/db';
+import { auth } from '@utils/auth';
+import { fromNodeHeaders } from 'better-auth/node';
 
 // Get all admin workers
 export const getAdminWorkers = async (req: Request, res: Response): Promise<void> => {
@@ -132,5 +134,83 @@ export const deleteAdminWorker = async (req: Request, res: Response): Promise<vo
   } catch (error) {
     console.error('Error deleting admin worker:', error);
     res.status(500).json({ success: false, error: 'Failed to delete admin worker' });
+  }
+};
+
+// Register a new delivery person
+export const registerDeliveryPerson = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      name,
+      phoneNumber,
+      vehicle // { type, licensePlate, maxWeight }
+    } = req.body;
+
+    // Validate required fields
+    if (!name || !phoneNumber || !vehicle) {
+      res.status(400).json({
+        success: false,
+        error: 'Name, phone number, and vehicle details are required'
+      });
+      return;
+    }
+
+    // Check if phone number is already registered
+    const existingUser = await db.users.findUnique({
+      where: { phoneNumber }
+    });
+
+    if (existingUser) {
+      res.status(400).json({
+        success: false,
+        error: 'Phone number already registered'
+      });
+      return;
+    }
+
+    // Create temporary user with phone verification pending
+    const createUserResponse = await auth.api.createUser({
+      body: {
+        name,
+        email: `${phoneNumber}@temp.courier-app.com`,
+        password: Math.random().toString(36).slice(-8), // Temporary password
+        role: 'DELIVERY_PERSON',
+        data: {
+          phoneNumber,
+          requirePasswordChange: true
+        }
+      },
+      headers: fromNodeHeaders(req.headers)
+    });
+
+    // Create associated vehicle
+    const newVehicle = await db.vehicle.create({
+      data: {
+        deliveryPersonId: createUserResponse.user.id,
+        type: vehicle.type,
+        licensePlate: vehicle.licensePlate,
+        maxWeight: vehicle.maxWeight
+      }
+    });
+
+    // Send OTP via the phone number plugin (this is handled automatically by the plugin)
+    // The plugin will handle the verification process when the user submits the OTP
+
+    res.status(201).json({
+      success: true,
+      message: 'Delivery person registration initiated. Verification code will be sent to phone.',
+      deliveryPerson: {
+        id: createUserResponse.user.id,
+        name,
+        phoneNumber,
+        vehicle: newVehicle
+      }
+    });
+  } catch (error) {
+    console.error('Error registering delivery person:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to register delivery person'
+    });
   }
 }; 

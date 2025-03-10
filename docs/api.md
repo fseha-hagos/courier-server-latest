@@ -245,6 +245,125 @@ GET /packages/:id/estimated-delivery-time
 ```
 Returns estimated delivery time based on current location and traffic conditions.
 
+## Admin Operations
+
+### Register New Delivery Person
+```http
+POST /admin/delivery-persons
+```
+
+**Request Body**
+```json
+{
+  "name": "string",
+  "phoneNumber": "string",
+  "vehicle": {
+    "type": "string",
+    "licensePlate": "string",
+    "maxWeight": "number"
+  }
+}
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "message": "Delivery person registration initiated. Verification code will be sent to phone.",
+  "deliveryPerson": {
+    "id": "string",
+    "name": "string",
+    "phoneNumber": "string",
+    "vehicle": {
+      "id": "string",
+      "type": "string",
+      "licensePlate": "string",
+      "maxWeight": "number"
+    }
+  }
+}
+```
+
+**Notes**
+- Creates a temporary user account for the delivery person
+- Automatically sends a verification code to the provided phone number
+- The delivery person must verify their phone number and set a password on first login
+- Vehicle types supported: "VAN", "BIKE", "MOTORCYCLE", "CAR"
+
+### Vehicle Management
+
+#### Create Vehicle
+```http
+POST /admin/vehicles
+```
+
+**Request Body**
+```json
+{
+  "type": "string",
+  "licensePlate": "string",
+  "maxWeight": "number",
+  "deliveryPersonId": "string"
+}
+```
+
+**Response**
+```json
+{
+  "success": true,
+  "vehicle": {
+    "id": "string",
+    "type": "string",
+    "licensePlate": "string",
+    "maxWeight": "number",
+    "deliveryPersonId": "string",
+    "currentLatitude": "number | null",
+    "currentLongitude": "number | null"
+  }
+}
+```
+
+#### Update Vehicle
+```http
+PUT /admin/vehicles/:id
+```
+
+**Request Body**
+```json
+{
+  "type": "string",
+  "licensePlate": "string",
+  "maxWeight": "number",
+  "deliveryPersonId": "string"
+}
+```
+
+#### Get Vehicle
+```http
+GET /admin/vehicles/:id
+```
+
+#### List Vehicles
+```http
+GET /admin/vehicles
+```
+
+**Query Parameters**
+- `deliveryPersonId` (optional): Filter by delivery person
+- `type` (optional): Filter by vehicle type
+- `available` (optional): Filter by availability status
+
+#### Delete Vehicle
+```http
+DELETE /admin/vehicles/:id
+```
+
+**Notes**
+- Vehicle types supported: "VAN", "BIKE", "MOTORCYCLE", "CAR"
+- License plates must be unique
+- A delivery person can have multiple vehicles
+- Deleting a vehicle with active deliveries is not allowed
+
 ## Error Codes
 
 ### Package Error Codes
