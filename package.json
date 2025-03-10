@@ -8,8 +8,8 @@
     "schema": "src/prisma/schema.prisma"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc-alias",
-    "start": "tsc-alias && tsx src/index.ts",
+    "build": "tsc -p tsconfig.json && tsc-alias && cp -r src/prisma dist/",
+    "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts"
   },
   "keywords": [],
