@@ -28,6 +28,13 @@ initializeWebSocket(server);
 // CORS Configuration
 const corsOptions = {
   origin: function (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
+    // Allow all origins in development
+    if (config.nodeEnv === 'development') {
+      callback(null, true);
+      return;
+    }
+    
+    // In production, check against allowed origins
     if (!origin || config.frontendUrl.includes(origin)) {
       callback(null, true);
     } else {
