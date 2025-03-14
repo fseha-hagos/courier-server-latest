@@ -35,7 +35,18 @@ const corsOptions = {
     }
     
     // In production, check against allowed origins
-    if (!origin || config.frontendUrl.includes(origin)) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    // Allow both http and https versions of localhost:5173
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://localhost:5173'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -43,6 +54,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
 };
 app.use(cors(corsOptions));
 
