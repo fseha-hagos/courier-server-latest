@@ -58,6 +58,10 @@ const router = Router();
  *                       type: integer
  *                     limit:
  *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get("/", getDeliveries);
 
@@ -90,6 +94,10 @@ router.get("/", getDeliveries);
  *                   $ref: '#/components/schemas/Delivery'
  *       404:
  *         description: Delivery not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get("/:id", getDeliveryById);
 
@@ -120,17 +128,36 @@ router.get("/:id", getDeliveryById);
  *               status:
  *                 type: string
  *                 enum: [ASSIGNED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+ *                 description: New delivery status
  *               note:
  *                 type: string
+ *                 description: Optional note about the status change
  *               location:
  *                 $ref: '#/components/schemas/Location'
+ *                 description: Current location of the delivery
  *     responses:
  *       200:
  *         description: Status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Delivery status updated successfully
+ *                 delivery:
+ *                   $ref: '#/components/schemas/Delivery'
  *       404:
  *         description: Delivery not found
+ *       401:
+ *         description: Unauthorized
  *       400:
  *         description: Invalid status transition
+ *       500:
+ *         description: Server error
  */
 router.put("/:id/status", updateDeliveryStatus);
 
@@ -154,10 +181,13 @@ router.put("/:id/status", updateDeliveryStatus);
  *             properties:
  *               packageId:
  *                 type: string
+ *                 description: ID of the package to deliver
  *               deliveryPersonId:
  *                 type: string
+ *                 description: ID of the delivery person
  *               vehicleId:
  *                 type: string
+ *                 description: ID of the vehicle to use
  *     responses:
  *       201:
  *         description: Delivery assigned successfully
@@ -168,12 +198,19 @@ router.put("/:id/status", updateDeliveryStatus);
  *               properties:
  *                 success:
  *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Delivery assigned successfully
  *                 delivery:
  *                   $ref: '#/components/schemas/Delivery'
  *       400:
  *         description: Invalid assignment request
  *       404:
  *         description: Package or delivery person not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.post("/assign", assignDelivery);
 

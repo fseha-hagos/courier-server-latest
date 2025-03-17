@@ -58,6 +58,10 @@ const router = Router();
  *                       type: integer
  *                     limit:
  *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/', getCustomers);
 
@@ -90,6 +94,10 @@ router.get('/', getCustomers);
  *                   $ref: '#/components/schemas/User'
  *       404:
  *         description: Customer not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/:id', getCustomerById);
 
@@ -117,10 +125,14 @@ router.get('/:id', getCustomerById);
  *             properties:
  *               name:
  *                 type: string
+ *                 description: Customer's full name
  *               email:
  *                 type: string
+ *                 format: email
+ *                 description: Customer's email address
  *               phoneNumber:
  *                 type: string
+ *                 description: Customer's phone number
  *     responses:
  *       200:
  *         description: Customer updated successfully
@@ -135,6 +147,12 @@ router.get('/:id', getCustomerById);
  *                   $ref: '#/components/schemas/User'
  *       404:
  *         description: Customer not found
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Server error
  */
 router.put('/:id', updateCustomer);
 
@@ -164,16 +182,37 @@ router.put('/:id', updateCustomer);
  *             properties:
  *               banned:
  *                 type: boolean
+ *                 description: Whether to ban or unban the customer
  *               banReason:
  *                 type: string
+ *                 description: Reason for banning the customer
  *               banExpires:
  *                 type: string
  *                 format: date-time
+ *                 description: When the ban expires (optional)
  *     responses:
  *       200:
  *         description: Ban status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Customer ban status updated successfully
+ *                 customer:
+ *                   $ref: '#/components/schemas/User'
  *       404:
  *         description: Customer not found
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Server error
  */
 router.put('/:id/ban', toggleCustomerBan);
 
@@ -235,6 +274,10 @@ router.put('/:id/ban', toggleCustomerBan);
  *                       type: integer
  *       404:
  *         description: Customer not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/:id/packages', getCustomerPackages);
 

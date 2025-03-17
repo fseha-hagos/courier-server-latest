@@ -32,6 +32,10 @@ const router = Router();
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/', getAdminWorkers);
 
@@ -64,6 +68,10 @@ router.get('/', getAdminWorkers);
  *                   $ref: '#/components/schemas/User'
  *       404:
  *         description: Admin not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/:id', getAdminWorkerById);
 
@@ -91,10 +99,14 @@ router.get('/:id', getAdminWorkerById);
  *             properties:
  *               name:
  *                 type: string
+ *                 description: Admin's full name
  *               email:
  *                 type: string
+ *                 format: email
+ *                 description: Admin's email address
  *               phoneNumber:
  *                 type: string
+ *                 description: Admin's phone number
  *     responses:
  *       200:
  *         description: Admin updated successfully
@@ -109,6 +121,12 @@ router.get('/:id', getAdminWorkerById);
  *                   $ref: '#/components/schemas/User'
  *       404:
  *         description: Admin not found
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Server error
  */
 router.put('/:id', updateAdminWorker);
 
@@ -138,16 +156,37 @@ router.put('/:id', updateAdminWorker);
  *             properties:
  *               banned:
  *                 type: boolean
+ *                 description: Whether to ban or unban the admin
  *               banReason:
  *                 type: string
+ *                 description: Reason for banning the admin
  *               banExpires:
  *                 type: string
  *                 format: date-time
+ *                 description: When the ban expires (optional)
  *     responses:
  *       200:
  *         description: Ban status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Admin ban status updated successfully
+ *                 admin:
+ *                   $ref: '#/components/schemas/User'
  *       404:
  *         description: Admin not found
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Server error
  */
 router.put('/:id/ban', toggleAdminBan);
 
@@ -169,8 +208,22 @@ router.put('/:id/ban', toggleAdminBan);
  *     responses:
  *       200:
  *         description: Admin deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Admin deleted successfully
  *       404:
  *         description: Admin not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.delete('/:id', deleteAdminWorker);
 
@@ -195,8 +248,10 @@ router.delete('/:id', deleteAdminWorker);
  *             properties:
  *               name:
  *                 type: string
+ *                 description: Delivery person's full name
  *               phoneNumber:
  *                 type: string
+ *                 description: Delivery person's phone number
  *               vehicle:
  *                 type: object
  *                 required:
@@ -207,10 +262,13 @@ router.delete('/:id', deleteAdminWorker);
  *                   type:
  *                     type: string
  *                     enum: [VAN, BIKE, MOTORCYCLE, CAR]
+ *                     description: Type of vehicle
  *                   licensePlate:
  *                     type: string
+ *                     description: Vehicle's license plate number
  *                   maxWeight:
  *                     type: number
+ *                     description: Maximum weight capacity in kilograms
  *     responses:
  *       201:
  *         description: Delivery person registered successfully
@@ -223,10 +281,15 @@ router.delete('/:id', deleteAdminWorker);
  *                   type: boolean
  *                 message:
  *                   type: string
+ *                   example: Delivery person registered successfully
  *                 deliveryPerson:
  *                   $ref: '#/components/schemas/DeliveryPerson'
  *       400:
  *         description: Invalid registration data
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.post('/delivery-persons', registerDeliveryPerson);
 

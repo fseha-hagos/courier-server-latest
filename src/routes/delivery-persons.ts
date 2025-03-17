@@ -49,6 +49,10 @@ const router = Router();
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/DeliveryPerson'
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/', getAllDeliveryPersons);
 
@@ -81,6 +85,10 @@ router.get('/', getAllDeliveryPersons);
  *                   $ref: '#/components/schemas/DeliveryPerson'
  *       404:
  *         description: Delivery person not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/:id', getDeliveryPersonById);
 
@@ -114,8 +122,24 @@ router.get('/:id', getDeliveryPersonById);
  *     responses:
  *       200:
  *         description: Status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Status updated successfully
  *       404:
  *         description: Delivery person not found
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid status value
+ *       500:
+ *         description: Server error
  */
 router.put('/:id/status', updateStatus);
 
@@ -139,12 +163,44 @@ router.put('/:id/status', updateStatus);
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/Location'
+ *             type: object
+ *             required:
+ *               - latitude
+ *               - longitude
+ *             properties:
+ *               latitude:
+ *                 type: number
+ *                 description: Latitude coordinate
+ *               longitude:
+ *                 type: number
+ *                 description: Longitude coordinate
+ *               placeId:
+ *                 type: string
+ *                 description: Google Places ID
+ *               address:
+ *                 type: string
+ *                 description: Human-readable address
  *     responses:
  *       200:
  *         description: Location updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Location updated successfully
  *       404:
  *         description: Delivery person not found
+ *       401:
+ *         description: Unauthorized
+ *       400:
+ *         description: Invalid location data
+ *       500:
+ *         description: Server error
  */
 router.put('/:id/location', updateLocation);
 
@@ -179,6 +235,10 @@ router.put('/:id/location', updateLocation);
  *                     $ref: '#/components/schemas/Delivery'
  *       404:
  *         description: Delivery person not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/:id/current-deliveries', getCurrentDeliveries);
 
@@ -240,6 +300,10 @@ router.get('/:id/current-deliveries', getCurrentDeliveries);
  *                       type: integer
  *       404:
  *         description: Delivery person not found
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
  */
 router.get('/:id/delivery-history', getDeliveryHistory);
 
@@ -247,6 +311,36 @@ router.get('/:id/delivery-history', getDeliveryHistory);
  * @swagger
  * components:
  *   schemas:
+ *     DeliveryPerson:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         name:
+ *           type: string
+ *         phoneNumber:
+ *           type: string
+ *         status:
+ *           type: string
+ *           enum: [ONLINE, OFFLINE]
+ *         currentLocation:
+ *           $ref: '#/components/schemas/Location'
+ *         averageRating:
+ *           type: number
+ *         completedDeliveries:
+ *           type: integer
+ *         vehicle:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: string
+ *             type:
+ *               type: string
+ *             licensePlate:
+ *               type: string
+ *             maxWeight:
+ *               type: number
+ * 
  *     Delivery:
  *       type: object
  *       properties:
