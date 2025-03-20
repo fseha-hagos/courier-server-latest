@@ -315,7 +315,7 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  * @swagger
  * /api/packages/{id}/nearby-delivery-persons:
  *   get:
- *     summary: Get nearby available delivery persons
+ *     summary: Get nearby delivery persons for a package
  *     tags: [Packages]
  *     security:
  *       - bearerAuth: []
@@ -329,7 +329,7 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  *       - in: query
  *         name: radius
  *         schema:
- *           type: number
+ *           type: integer
  *         description: Search radius in meters (default: 5000)
  *       - in: query
  *         name: limit
@@ -338,7 +338,7 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  *         description: Maximum number of delivery persons to return (default: 10)
  *     responses:
  *       200:
- *         description: Nearby delivery persons retrieved successfully
+ *         description: List of nearby delivery persons
  *         content:
  *           application/json:
  *             schema:
@@ -357,15 +357,8 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  *                         type: string
  *                       phoneNumber:
  *                         type: string
- *                       status:
- *                         type: string
- *                         enum: [ONLINE, OFFLINE]
- *                       currentLocation:
- *                         $ref: '#/components/schemas/Location'
  *                       averageRating:
  *                         type: number
- *                       completedDeliveries:
- *                         type: integer
  *                       vehicle:
  *                         type: object
  *                         properties:
@@ -377,12 +370,10 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  *                             type: string
  *                           maxWeight:
  *                             type: number
- *                       distance:
- *                         type: number
- *                         description: Distance to package in meters
- *                       eta:
- *                         type: number
- *                         description: Estimated time of arrival in seconds
+ *                           currentLatitude:
+ *                             type: number
+ *                           currentLongitude:
+ *                             type: number
  *       404:
  *         description: Package not found
  *       401:

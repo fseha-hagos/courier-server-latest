@@ -2,9 +2,25 @@ import { Request, Response } from 'express';
 import { db } from "@utils/db";
 import { locationService, LocationStatus } from "@utils/location";
 import calculateDistances from "@utils/distanceMatrix";
-import { DeliveryStatus, PackageStatus } from '@prisma/client';
+import { DeliveryStatus, PackageStatus, Users, Vehicle, Location } from '@prisma/client';
 import calculateEstimatedDeliveryTime from "@utils/distanceMatrix";
 import { emitPackageUpdate, emitPackageCancelled, STATUS_TRANSITIONS } from '@utils/websocket';
+
+// Status mapping between package and delivery
+const PACKAGE_DELIVERY_STATUS_MAP: Record<PackageStatus, DeliveryStatus | null> = {
+    PENDING: null, // No delivery exists yet
+    ASSIGNED: DeliveryStatus.ASSIGNED,
+    IN_PROGRESS: DeliveryStatus.IN_PROGRESS,
+    COMPLETED: DeliveryStatus.COMPLETED,
+    FAILED: DeliveryStatus.FAILED,
+    CANCELLED: null // Delivery is cancelled/deleted
+};
+
+// Helper function to validate status transition
+const validateStatusTransition = (currentStatus: PackageStatus, newStatus: PackageStatus): boolean => {
+    const allowedTransitions = STATUS_TRANSITIONS[currentStatus];
+    return allowedTransitions.includes(newStatus);
+};
 
 // Get all packages
 export const getPackages = async (req: Request, res: Response): Promise<void> => {
@@ -529,9 +545,9 @@ export const getAvailableDeliveryPersons = async (req: Request, res: Response): 
     try {
         const { id: packageId } = req.params;
 
+        // Get package to check weight
         const pkg = await db.package.findUnique({
-            where: { id: packageId },
-            select: { weight: true }
+            where: { id: packageId }
         });
 
         if (!pkg) {
@@ -545,53 +561,45 @@ export const getAvailableDeliveryPersons = async (req: Request, res: Response): 
             return;
         }
 
-        const availableDeliveryPersons = await db.users.findMany({
+        // Get available delivery persons
+        const deliveryPersons = await db.users.findMany({
             where: {
                 role: 'DELIVERY_PERSON',
                 status: 'ONLINE',
-                banned: false,
+                OR: [
+                    { banned: false },
+                    { banned: null }
+                ],
                 vehicles: {
                     some: {
-                        maxWeight: { gte: pkg.weight }
+                        maxWeight: {
+                            gte: pkg.weight
+                        }
                     }
                 }
             },
-            select: {
-                id: true,
-                name: true,
-                phoneNumber: true,
-                averageRating: true,
-                vehicles: {
-                    where: {
-                        maxWeight: { gte: pkg.weight }
-                    },
-                    select: {
-                        id: true,
-                        type: true,
-                        licensePlate: true,
-                        maxWeight: true,
-                        currentLatitude: true,
-                        currentLongitude: true
-                    }
-                }
+            include: {
+                vehicles: true
             }
         });
 
-        const formattedDeliveryPersons = availableDeliveryPersons.map(dp => ({
+        // Format response
+        const formattedDeliveryPersons = deliveryPersons.map(dp => ({
             id: dp.id,
             name: dp.name,
             phoneNumber: dp.phoneNumber,
+            status: dp.status,
             rating: dp.averageRating || 0,
-            currentLocation: dp.vehicles[0]?.currentLatitude ? {
-                latitude: dp.vehicles[0].currentLatitude,
-                longitude: dp.vehicles[0].currentLongitude
-            } : undefined,
-            vehicle: {
-                id: dp.vehicles[0]?.id,
-                type: dp.vehicles[0]?.type,
-                plateNumber: dp.vehicles[0]?.licensePlate,
-                maxWeight: dp.vehicles[0]?.maxWeight
-            }
+            currentLocation: dp.vehicles[0] ? {
+                latitude: dp.vehicles[0].currentLatitude || 0,
+                longitude: dp.vehicles[0].currentLongitude || 0
+            } : null,
+            vehicle: dp.vehicles[0] ? {
+                id: dp.vehicles[0].id,
+                type: dp.vehicles[0].type,
+                plateNumber: dp.vehicles[0].licensePlate,
+                maxWeight: dp.vehicles[0].maxWeight
+            } : null
         }));
 
         res.status(200).json({
@@ -599,7 +607,7 @@ export const getAvailableDeliveryPersons = async (req: Request, res: Response): 
             deliveryPersons: formattedDeliveryPersons
         });
     } catch (error: any) {
-        console.error('Error fetching available delivery persons:', error);
+        console.error('Error getting available delivery persons:', error);
         res.status(500).json({
             success: false,
             error: {
@@ -1147,12 +1155,6 @@ export enum PackageErrorCodes {
     VEHICLE_WEIGHT_EXCEEDED = 'VEHICLE_WEIGHT_EXCEEDED'
 }
 
-// Validate status transition
-const validateStatusTransition = (currentStatus: PackageStatus, newStatus: PackageStatus): boolean => {
-    const allowedTransitions = STATUS_TRANSITIONS[currentStatus];
-    return allowedTransitions.includes(newStatus);
-};
-
 // Update package status
 export const updatePackageStatus = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -1188,31 +1190,47 @@ export const updatePackageStatus = async (req: Request, res: Response): Promise<
             return;
         }
 
-        const updatedPackage = await db.package.update({
-            where: { id: packageId },
-            data: {
-                status: newStatus,
-                timeline: {
-                    upsert: {
-                        create: {
-                            [newStatus.toLowerCase()]: new Date()
-                        },
-                        update: {
-                            [newStatus.toLowerCase()]: new Date()
+        // Get the corresponding delivery status
+        const deliveryStatus = PACKAGE_DELIVERY_STATUS_MAP[newStatus as keyof typeof PACKAGE_DELIVERY_STATUS_MAP];
+
+        // Use a transaction to update both package and delivery status
+        const result = await db.$transaction([
+            db.package.update({
+                where: { id: packageId },
+                data: {
+                    status: newStatus,
+                    timeline: {
+                        upsert: {
+                            create: {
+                                [newStatus.toLowerCase()]: new Date()
+                            },
+                            update: {
+                                [newStatus.toLowerCase()]: new Date()
+                            }
+                        }
+                    }
+                },
+                include: {
+                    timeline: true,
+                    delivery: {
+                        include: {
+                            deliveryPerson: true,
+                            vehicle: true
                         }
                     }
                 }
-            },
-            include: {
-                timeline: true,
-                delivery: {
-                    include: {
-                        deliveryPerson: true,
-                        vehicle: true
-                    }
-                }
-            }
-        });
+            }),
+            // Only update delivery if it exists and new status is not null
+            ...(pkg.delivery && deliveryStatus ? [
+                db.delivery.update({
+                    where: { packageId },
+                    data: { status: deliveryStatus }
+                })
+            ] : [])
+        ]) as [any, any]; // Type assertion for transaction result
+
+        const updatedPackage = result[0];
+        const updatedDelivery = pkg.delivery && deliveryStatus ? result[1] : null;
 
         // Emit real-time update
         emitPackageUpdate(packageId, {
@@ -1222,7 +1240,8 @@ export const updatePackageStatus = async (req: Request, res: Response): Promise<
 
         res.status(200).json({
             success: true,
-            package: updatedPackage
+            package: updatedPackage,
+            delivery: updatedDelivery
         });
     } catch (error: any) {
         console.error('Error updating package status:', error);

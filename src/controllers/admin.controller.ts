@@ -168,6 +168,29 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
       return;
     }
 
+    // Get the current session to verify admin authentication
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers)
+    });
+
+    if (!session) {
+      res.status(401).json({
+        success: false,
+        error: 'Unauthorized: No valid session found'
+      });
+      return;
+    }
+
+    // Verify admin role
+    const userRole = session.user.role || '';
+    if (!['admin', 'superAdmin'].includes(userRole)) {
+      res.status(403).json({
+        success: false,
+        error: 'Forbidden: Only admins can register delivery persons'
+      });
+      return;
+    }
+
     // Create temporary user with phone verification pending
     const createUserResponse = await auth.api.createUser({
       body: {
@@ -206,11 +229,19 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
         vehicle: newVehicle
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error registering delivery person:', error);
+    // Log more details about the error
+    if (error.status === 'UNAUTHORIZED') {
+      console.error('Authentication error details:', {
+        headers: req.headers,
+        error: error.message
+      });
+    }
     res.status(500).json({
       success: false,
-      error: 'Failed to register delivery person'
+      error: 'Failed to register delivery person',
+      details: error.message
     });
   }
 }; 
