@@ -2,9 +2,10 @@ import { Request, Response } from 'express';
 import { db } from "@utils/db";
 import { locationService, LocationStatus } from "@utils/location";
 import calculateDistances from "@utils/distanceMatrix";
-import { DeliveryStatus, PackageStatus, Users, Vehicle, Location } from '@prisma/client';
+import { DeliveryStatus, PackageStatus, Users, Vehicle, Location, UserStatus } from '@prisma/client';
 import calculateEstimatedDeliveryTime from "@utils/distanceMatrix";
 import { emitPackageUpdate, emitPackageCancelled, STATUS_TRANSITIONS } from '@utils/websocket';
+import { emitDashboardStatsUpdate } from '@utils/websocket';
 
 // Status mapping between package and delivery
 const PACKAGE_DELIVERY_STATUS_MAP: Record<PackageStatus, DeliveryStatus | null> = {
@@ -215,6 +216,69 @@ export const createPackage = async (req: Request, res: Response): Promise<void> 
             );
 
             console.log('[Package Creation] Location history initialized');
+
+            // Emit dashboard stats update
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const [
+              activeDeliveries,
+              todayPackages,
+              onlineDeliveryPersons,
+              completedDeliveries,
+              totalDeliveries
+            ] = await Promise.all([
+              // Total active deliveries
+              db.delivery.count({
+                where: {
+                  status: {
+                    in: [DeliveryStatus.ASSIGNED, DeliveryStatus.IN_PROGRESS]
+                  }
+                }
+              }),
+              // Total packages created today
+              db.package.count({
+                where: {
+                  createdAt: {
+                    gte: today
+                  }
+                }
+              }),
+              // Active delivery persons
+              db.users.count({
+                where: {
+                  role: 'DELIVERY_PERSON',
+                  status: UserStatus.ONLINE
+                }
+              }),
+              // Completed deliveries (for success rate)
+              db.delivery.count({
+                where: {
+                  status: DeliveryStatus.COMPLETED
+                }
+              }),
+              // Total deliveries (for success rate)
+              db.delivery.count({
+                where: {
+                  status: {
+                    in: [DeliveryStatus.COMPLETED, DeliveryStatus.FAILED]
+                  }
+                }
+              })
+            ]);
+
+            // Calculate success rate
+            const successRate = totalDeliveries > 0 
+              ? (completedDeliveries / totalDeliveries) * 100 
+              : 0;
+
+            // Emit dashboard stats update
+            emitDashboardStatsUpdate({
+              totalActiveDeliveries: activeDeliveries,
+              totalPackagesToday: todayPackages,
+              activeDeliveryPersons: onlineDeliveryPersons,
+              successRate
+            });
 
             res.status(201).json({ success: true, package: newPackage });
         } catch (error: any) {
