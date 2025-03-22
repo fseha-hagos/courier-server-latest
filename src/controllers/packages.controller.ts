@@ -1296,10 +1296,73 @@ export const updatePackageStatus = async (req: Request, res: Response): Promise<
         const updatedPackage = result[0];
         const updatedDelivery = pkg.delivery && deliveryStatus ? result[1] : null;
 
-        // Emit real-time update
+        // Emit real-time updates
         emitPackageUpdate(packageId, {
             status: newStatus,
             timestamp: new Date()
+        });
+
+        // Emit dashboard stats update
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const [
+          activeDeliveries,
+          todayPackages,
+          onlineDeliveryPersons,
+          completedDeliveries,
+          totalDeliveries
+        ] = await Promise.all([
+          // Total active deliveries
+          db.delivery.count({
+            where: {
+              status: {
+                in: [DeliveryStatus.ASSIGNED, DeliveryStatus.IN_PROGRESS]
+              }
+            }
+          }),
+          // Total packages created today
+          db.package.count({
+            where: {
+              createdAt: {
+                gte: today
+              }
+            }
+          }),
+          // Active delivery persons
+          db.users.count({
+            where: {
+              role: 'DELIVERY_PERSON',
+              status: UserStatus.ONLINE
+            }
+          }),
+          // Completed deliveries (for success rate)
+          db.delivery.count({
+            where: {
+              status: DeliveryStatus.COMPLETED
+            }
+          }),
+          // Total deliveries (for success rate)
+          db.delivery.count({
+            where: {
+              status: {
+                in: [DeliveryStatus.COMPLETED, DeliveryStatus.FAILED]
+              }
+            }
+          })
+        ]);
+
+        // Calculate success rate
+        const successRate = totalDeliveries > 0 
+          ? (completedDeliveries / totalDeliveries) * 100 
+          : 0;
+
+        // Emit dashboard stats update
+        emitDashboardStatsUpdate({
+          totalActiveDeliveries: activeDeliveries,
+          totalPackagesToday: todayPackages,
+          activeDeliveryPersons: onlineDeliveryPersons,
+          successRate
         });
 
         res.status(200).json({
@@ -1428,10 +1491,73 @@ export const assignPackage = async (req: Request, res: Response): Promise<void> 
             })
         ]);
 
-        // Emit real-time update
+        // Emit real-time updates
         emitPackageUpdate(packageId, {
             status: PackageStatus.ASSIGNED,
             timestamp: new Date()
+        });
+
+        // Emit dashboard stats update
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const [
+          activeDeliveries,
+          todayPackages,
+          onlineDeliveryPersons,
+          completedDeliveries,
+          totalDeliveries
+        ] = await Promise.all([
+          // Total active deliveries
+          db.delivery.count({
+            where: {
+              status: {
+                in: [DeliveryStatus.ASSIGNED, DeliveryStatus.IN_PROGRESS]
+              }
+            }
+          }),
+          // Total packages created today
+          db.package.count({
+            where: {
+              createdAt: {
+                gte: today
+              }
+            }
+          }),
+          // Active delivery persons
+          db.users.count({
+            where: {
+              role: 'DELIVERY_PERSON',
+              status: UserStatus.ONLINE
+            }
+          }),
+          // Completed deliveries (for success rate)
+          db.delivery.count({
+            where: {
+              status: DeliveryStatus.COMPLETED
+            }
+          }),
+          // Total deliveries (for success rate)
+          db.delivery.count({
+            where: {
+              status: {
+                in: [DeliveryStatus.COMPLETED, DeliveryStatus.FAILED]
+              }
+            }
+          })
+        ]);
+
+        // Calculate success rate
+        const successRate = totalDeliveries > 0 
+          ? (completedDeliveries / totalDeliveries) * 100 
+          : 0;
+
+        // Emit dashboard stats update
+        emitDashboardStatsUpdate({
+          totalActiveDeliveries: activeDeliveries,
+          totalPackagesToday: todayPackages,
+          activeDeliveryPersons: onlineDeliveryPersons,
+          successRate
         });
 
         res.status(200).json({
