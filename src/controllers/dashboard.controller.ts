@@ -199,29 +199,27 @@ export const getDeliveryStatusBreakdown = async (req: Request, res: Response): P
     // Get all possible delivery statuses
     const statuses = Object.values(DeliveryStatus);
 
-    // Count deliveries for each status in the time range
-    const statusCounts = await Promise.all(
-      statuses.map(status =>
-        db.delivery.count({
-          where: {
-            status,
-            createdAt: {
-              gte: startDate
-            }
-          }
-        })
-      )
-    );
+    // Get all deliveries in the time range with their statuses
+    const deliveries = await db.delivery.findMany({
+      where: {
+        createdAt: {
+          gte: startDate
+        }
+      },
+      select: {
+        status: true
+      }
+    });
 
-    // Format response
-    const breakdown = statuses.map((status, index) => ({
+    // Count deliveries for each status
+    const statusCounts = statuses.map(status => ({
       status,
-      count: statusCounts[index]
+      count: deliveries.filter(d => d.status === status).length
     }));
 
     res.status(200).json({
       success: true,
-      breakdown
+      breakdown: statusCounts
     });
   } catch (error) {
     console.error('Error fetching delivery status breakdown:', error);
