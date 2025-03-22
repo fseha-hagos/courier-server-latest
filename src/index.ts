@@ -14,6 +14,7 @@ import deliveriesRouter from "@routes/deliveries"; // Deliveries routes
 import deliveryPersonsRouter from "@routes/delivery-persons"; // Delivery Persons routes
 import adminRouter from "@routes/admin";
 import customersRouter from "@routes/customers";
+import dashboardRouter from "@routes/dashboard"; // Dashboard routes
 
 const app = express();
 const server = createServer(app);
@@ -85,6 +86,7 @@ app.use("/api/delivery-persons", deliveryPersonsRouter);
 // Business Logic Routes
 app.use("/api/packages", packagesRouter);
 app.use("/api/deliveries", deliveriesRouter);
+app.use("/api/dashboard", dashboardRouter); // Dashboard routes
 
 // =========================================
 // Authentication Routes

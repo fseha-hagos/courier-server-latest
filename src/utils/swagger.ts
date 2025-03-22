@@ -60,6 +60,10 @@ Authorization: Bearer <your_token>
     ],
     tags: [
       {
+        name: 'Dashboard',
+        description: 'Dashboard statistics and analytics',
+      },
+      {
         name: 'Packages',
         description: 'Package management operations',
       },

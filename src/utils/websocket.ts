@@ -9,8 +9,13 @@ export const initializeWebSocket = (server: HttpServer) => {
         cors: {
             origin: process.env.FRONTEND_URL || "http://localhost:5173",
             methods: ["GET", "POST"],
-            credentials: true
-        }
+            credentials: true,
+            allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+        },
+        transports: ['websocket', 'polling'],
+        allowEIO3: true,
+        pingTimeout: 60000,
+        pingInterval: 25000
     });
 
     io.on('connection', (socket: Socket) => {
@@ -26,6 +31,18 @@ export const initializeWebSocket = (server: HttpServer) => {
         socket.on('unsubscribe:package', (packageId: string) => {
             socket.leave(`package:${packageId}`);
             console.log(`Client ${socket.id} unsubscribed from package ${packageId}`);
+        });
+
+        // Subscribe to dashboard updates
+        socket.on('subscribe:dashboard', () => {
+            socket.join('dashboard');
+            console.log(`Client ${socket.id} subscribed to dashboard updates`);
+        });
+
+        // Unsubscribe from dashboard updates
+        socket.on('unsubscribe:dashboard', () => {
+            socket.leave('dashboard');
+            console.log(`Client ${socket.id} unsubscribed from dashboard updates`);
         });
 
         socket.on('disconnect', () => {
@@ -174,4 +191,77 @@ export const STATUS_TRANSITIONS: Record<PackageStatus, PackageStatus[]> = {
     COMPLETED: [],
     FAILED: [PackageStatus.PENDING],
     CANCELLED: [PackageStatus.PENDING]
+};
+
+interface DashboardStatsUpdate {
+    totalActiveDeliveries: number;
+    totalPackagesToday: number;
+    activeDeliveryPersons: number;
+    successRate: number;
+}
+
+interface RecentDelivery {
+    id: string;
+    customerName: string;
+    customerPhone: string;
+    deliveryStatus: DeliveryStatus;
+    updatedAt: Date;
+}
+
+interface TopDeliveryPerson {
+    id: string;
+    name: string;
+    phoneNumber: string;
+    status: string;
+    rating: number;
+    completedDeliveries: number;
+    currentLocation: {
+        latitude: number;
+        longitude: number;
+    } | null;
+    vehicle: {
+        id: string;
+        type: string;
+        plateNumber: string;
+        maxWeight: number;
+    } | null;
+}
+
+// Emit dashboard stats update
+export const emitDashboardStatsUpdate = (stats: DashboardStatsUpdate): void => {
+    if (!io) {
+        console.error('WebSocket not initialized');
+        return;
+    }
+
+    io.to('dashboard').emit('dashboard:stats_update', {
+        timestamp: new Date(),
+        ...stats
+    });
+};
+
+// Emit new delivery update for dashboard
+export const emitDashboardDeliveryUpdate = (delivery: RecentDelivery): void => {
+    if (!io) {
+        console.error('WebSocket not initialized');
+        return;
+    }
+
+    io.to('dashboard').emit('dashboard:delivery_update', {
+        timestamp: new Date(),
+        delivery
+    });
+};
+
+// Emit top delivery persons update
+export const emitDashboardTopDeliveryPersonsUpdate = (deliveryPersons: TopDeliveryPerson[]): void => {
+    if (!io) {
+        console.error('WebSocket not initialized');
+        return;
+    }
+
+    io.to('dashboard').emit('dashboard:top_delivery_persons_update', {
+        timestamp: new Date(),
+        deliveryPersons
+    });
 }; 
