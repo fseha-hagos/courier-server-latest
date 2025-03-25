@@ -17,7 +17,9 @@ import {
     rateDelivery,
     addDeliveryNote,
     assignPackage,
-    cancelPackage
+    cancelPackage,
+    requestDelivery,
+    handleDeliveryResponse
 } from '@controllers/packages.controller';
 
 const router = Router();
@@ -330,12 +332,12 @@ router.get('/:id/available-delivery-persons', getAvailableDeliveryPersons);
  *         name: radius
  *         schema:
  *           type: integer
- *         description: Search radius in meters (default: 5000)
+ *           description: Search radius in meters (default - 5000)
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *         description: Maximum number of delivery persons to return (default: 10)
+ *           description: Maximum number of delivery persons to return (default - 10)
  *     responses:
  *       200:
  *         description: List of nearby delivery persons
@@ -1172,5 +1174,83 @@ router.post('/:id/restore', restorePackage);
  *         description: Server error
  */
 router.post('/:id/validate-delivery-person', validateDeliveryPerson);
+
+/**
+ * @swagger
+ * /api/packages/{packageId}/request-delivery:
+ *   post:
+ *     summary: Request delivery for a package
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: packageId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the package
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               expiresIn:
+ *                 type: number
+ *                 description: Time in minutes before request expires (default - 5)
+ *               priority:
+ *                 type: string
+ *                 enum: [LOW, MEDIUM, HIGH]
+ *                 description: Priority level of the delivery
+ *     responses:
+ *       201:
+ *         description: Delivery request created successfully
+ *       400:
+ *         description: Invalid request
+ *       404:
+ *         description: Package not found
+ */
+router.post('/:id/request-delivery', requestDelivery);
+
+/**
+ * @swagger
+ * /api/packages/{packageId}/delivery-response:
+ *   post:
+ *     summary: Respond to a delivery request
+ *     tags: [Packages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: packageId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the package
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               response:
+ *                 type: string
+ *                 enum: [ACCEPT, DECLINE]
+ *                 description: Response to the delivery request
+ *               reason:
+ *                 type: string
+ *                 description: Reason for declining (optional)
+ *     responses:
+ *       200:
+ *         description: Response processed successfully
+ *       400:
+ *         description: Invalid request
+ *       404:
+ *         description: Delivery request not found
+ */
+router.post('/:id/delivery-response', handleDeliveryResponse);
 
 export default router;

@@ -6,7 +6,35 @@ import { phoneNumber, bearer } from "better-auth/plugins"
 import { fromNodeHeaders } from "better-auth/node";
 import { admin } from "better-auth/plugins"
 import { expo } from "@better-auth/expo";
+import { formatPhoneNumberForStorage, isValidPhoneNumber } from "./phone";
 
+// Function to ensure phone number is in consistent format
+const ensurePhoneNumberFormat = async (phoneNumber: string): Promise<void> => {
+    try {
+        const formattedNumber = formatPhoneNumberForStorage(phoneNumber);
+        
+        // Try to find and update any existing user with this phone number
+        const user = await db.users.findFirst({
+            where: {
+                OR: [
+                    { phoneNumber },
+                    { phoneNumber: formattedNumber },
+                    { phoneNumber: phoneNumber.replace(/\s+/g, '') }
+                ]
+            }
+        });
+
+        if (user) {
+            // Update to consistent format if found
+            await db.users.update({
+                where: { id: user.id },
+                data: { phoneNumber: formattedNumber }
+            });
+        }
+    } catch (error) {
+        console.error('Error updating phone number format:', error);
+    }
+};
 
 export const auth = betterAuth({
     database: prismaAdapter(db, {
@@ -29,40 +57,25 @@ export const auth = betterAuth({
     plugins: [
         phoneNumber({
             expiresIn: 500000, // 5 minutes 
-            sendOTP: ({ phoneNumber, code }, request) => {
-                // Implement sending OTP code via SMS
-                sendVerificationSms(phoneNumber, code)
+            sendOTP: async ({ phoneNumber, code }, request) => {
+                const formattedNumber = formatPhoneNumberForStorage(phoneNumber);
+                await ensurePhoneNumberFormat(phoneNumber);
+                sendVerificationSms(formattedNumber, code);
             },
             signUpOnVerification: {
-                getTempEmail: (phoneNumber) => {
-                    return `${phoneNumber}@my-site.com`
+                getTempEmail: (phoneNumber: string) => {
+                    const formattedNumber = formatPhoneNumberForStorage(phoneNumber);
+                    return `${formattedNumber}@my-site.com`
                 },
-                //optionally you can alos pass `getTempName` function to generate a temporary name for the user
-                getTempName: (phoneNumber) => {
-                    return phoneNumber //by default it will use the phone number as the name
+                getTempName: (phoneNumber: string) => {
+                    return formatPhoneNumberForStorage(phoneNumber);
                 }
-            },
-            // async callbackOnVerification(data, request) {
-            //     try {
-            //         const newPassword = "hello";
-            //         await auth.api.setPassword({ body: { newPassword } });
-            //         console.log("Password successfully set");
-            //     } catch (error) {
-            //         console.error("Error verifying phone number:", error)
-            //     }
-            //     // console.log("Phone number verified", data)
-            //     if(request){
-            //         const headers = fromNodeHeaders(Object.fromEntries(request.headers.entries()))
-            //         console.log("Phone number verified: Request.headers", headers)
-
-            //     }
-            // },
+            }
         }),
         admin({
             defaultRole: "customer",
             adminRole: ["admin", "superAdmin"]
         }),
         expo()
-
     ]
 })

@@ -5,7 +5,8 @@ import calculateDistances from "@utils/distanceMatrix";
 import { DeliveryStatus, PackageStatus, Users, Vehicle, Location, UserStatus } from '@prisma/client';
 import calculateEstimatedDeliveryTime from "@utils/distanceMatrix";
 import { emitPackageUpdate, emitPackageCancelled, STATUS_TRANSITIONS } from '@utils/websocket';
-import { emitDashboardStatsUpdate } from '@utils/websocket';
+import { emitDashboardStatsUpdate, emitDeliveryRequest, emitDeliveryResponse } from '@utils/websocket';
+import { AuthenticatedRequest } from '@types/express';
 
 // Status mapping between package and delivery
 const PACKAGE_DELIVERY_STATUS_MAP: Record<PackageStatus, DeliveryStatus | null> = {
@@ -1739,5 +1740,287 @@ export const cancelPackage = async (req: Request, res: Response): Promise<void> 
             }
         });
     }
+};
+
+// Request delivery for a package
+export const requestDelivery = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id: packageId } = req.params;
+    const { expiresIn = 5, priority = 'MEDIUM' } = req.body;
+
+    const pkg = await db.package.findUnique({
+      where: { id: packageId },
+      include: {
+        pickupLocation: true,
+        deliveryLocation: true
+      }
+    });
+
+    if (!pkg) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'PACKAGE_NOT_FOUND',
+          message: 'Package not found'
+        }
+      });
+      return;
+    }
+
+    if (pkg.status !== PackageStatus.PENDING) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_STATUS',
+          message: 'Package must be in PENDING status to request delivery'
+        }
+      });
+      return;
+    }
+
+    // Create delivery request
+    const requestedAt = new Date();
+    const requestExpiresAt = new Date(requestedAt.getTime() + expiresIn * 60000);
+
+    const delivery = await db.delivery.create({
+      data: {
+        packageId,
+        status: DeliveryStatus.PENDING_ACCEPTANCE,
+        requestedAt,
+        requestExpiresAt,
+        declinedBy: []
+      } as any // Type assertion needed due to Prisma schema changes
+    });
+
+    // Emit delivery request event
+    emitDeliveryRequest({
+      packageId,
+      timestamp: requestedAt,
+      expiresAt: requestExpiresAt,
+      pickupLocation: {
+        address: pkg.pickupLocation.address,
+        latitude: pkg.pickupLocation.latitude,
+        longitude: pkg.pickupLocation.longitude
+      },
+      deliveryLocation: {
+        address: pkg.deliveryLocation.address,
+        latitude: pkg.deliveryLocation.latitude,
+        longitude: pkg.deliveryLocation.longitude
+      },
+      package: {
+        description: pkg.description,
+        weight: pkg.weight,
+        priority
+      }
+    });
+
+    res.status(201).json({
+      success: true,
+      delivery
+    });
+  } catch (error: any) {
+    console.error('Error requesting delivery:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'REQUEST_FAILED',
+        message: error.message
+      }
+    });
+  }
+};
+
+// Handle delivery person's response to a delivery request
+export const handleDeliveryResponse = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id: packageId } = req.params;
+    const { response, reason } = req.body;
+    const deliveryPersonId = req.user.id;
+
+    const delivery = await db.delivery.findUnique({
+      where: { packageId },
+      include: {
+        package: true
+      }
+    });
+
+    if (!delivery) {
+      res.status(404).json({
+        success: false,
+        error: {
+          code: 'DELIVERY_NOT_FOUND',
+          message: 'Delivery request not found'
+        }
+      });
+      return;
+    }
+
+    if (delivery.status !== DeliveryStatus.PENDING_ACCEPTANCE) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_STATUS',
+          message: 'Delivery request is no longer pending'
+        }
+      });
+      return;
+    }
+
+    if (new Date() > delivery.requestExpiresAt!) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'REQUEST_EXPIRED',
+          message: 'Delivery request has expired'
+        }
+      });
+      return;
+    }
+
+    // Check if delivery person has already declined
+    const declinedBy = delivery.declinedBy as any[] || [];
+    if (declinedBy.some(d => d.deliveryPersonId === deliveryPersonId)) {
+      res.status(400).json({
+        success: false,
+        error: {
+          code: 'ALREADY_DECLINED',
+          message: 'You have already declined this delivery request'
+        }
+      });
+      return;
+    }
+
+    if (response === 'DECLINE') {
+      // Update declinedBy array
+      const updatedDeclinedBy = [...declinedBy, {
+        deliveryPersonId,
+        reason,
+        declinedAt: new Date()
+      }];
+
+      const updatedDelivery = await db.delivery.update({
+        where: { packageId },
+        data: {
+          declinedBy: updatedDeclinedBy,
+          status: DeliveryStatus.DECLINED
+        } as any // Type assertion needed due to Prisma schema changes
+      });
+
+      emitDeliveryResponse(packageId, {
+        packageId,
+        timestamp: new Date(),
+        deliveryPersonId,
+        response: 'DECLINE',
+        reason
+      });
+
+      res.status(200).json({
+        success: true,
+        delivery: updatedDelivery
+      });
+    } else {
+      // Accept delivery
+      const [updatedDelivery, updatedPackage] = await db.$transaction([
+        db.delivery.update({
+          where: { packageId },
+          data: {
+            deliveryPersonId,
+            status: DeliveryStatus.ASSIGNED
+          }
+        }),
+        db.package.update({
+          where: { id: packageId },
+          data: {
+            status: PackageStatus.ASSIGNED
+          }
+        })
+      ]);
+
+      emitDeliveryResponse(packageId, {
+        packageId,
+        timestamp: new Date(),
+        deliveryPersonId,
+        response: 'ACCEPT'
+      });
+
+      // Emit dashboard stats update
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const [
+        activeDeliveries,
+        todayPackages,
+        onlineDeliveryPersons,
+        completedDeliveries,
+        totalDeliveries
+      ] = await Promise.all([
+        // Total active deliveries
+        db.delivery.count({
+          where: {
+            status: {
+              in: [DeliveryStatus.ASSIGNED, DeliveryStatus.IN_PROGRESS]
+            }
+          }
+        }),
+        // Total packages created today
+        db.package.count({
+          where: {
+            createdAt: {
+              gte: today
+            }
+          }
+        }),
+        // Active delivery persons
+        db.users.count({
+          where: {
+            role: 'DELIVERY_PERSON',
+            status: UserStatus.ONLINE
+          }
+        }),
+        // Completed deliveries (for success rate)
+        db.delivery.count({
+          where: {
+            status: DeliveryStatus.COMPLETED
+          }
+        }),
+        // Total deliveries (for success rate)
+        db.delivery.count({
+          where: {
+            status: {
+              in: [DeliveryStatus.COMPLETED, DeliveryStatus.FAILED]
+            }
+          }
+        })
+      ]);
+
+      // Calculate success rate
+      const successRate = totalDeliveries > 0 
+        ? (completedDeliveries / totalDeliveries) * 100 
+        : 0;
+
+      // Emit dashboard stats update
+      emitDashboardStatsUpdate({
+        totalActiveDeliveries: activeDeliveries,
+        totalPackagesToday: todayPackages,
+        activeDeliveryPersons: onlineDeliveryPersons,
+        successRate
+      });
+
+      res.status(200).json({
+        success: true,
+        delivery: updatedDelivery,
+        package: updatedPackage
+      });
+    }
+  } catch (error: any) {
+    console.error('Error handling delivery response:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'RESPONSE_FAILED',
+        message: error.message
+      }
+    });
+  }
 };
 

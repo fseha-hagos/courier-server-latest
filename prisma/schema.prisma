@@ -1,0 +1,42 @@
+enum DeliveryStatus {
+  PENDING_ACCEPTANCE // New status for delivery requests
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  DECLINED
+}
+
+model Delivery {
+  id              String         @id @default(uuid())
+  packageId       String         @unique
+  package         Package        @relation(fields: [packageId], references: [id])
+  deliveryPersonId String?      // Optional since it's not assigned immediately
+  deliveryPerson  User?          @relation("DeliveryPersonDeliveries", fields: [deliveryPersonId], references: [id])
+  vehicleId       String?
+  vehicle         Vehicle?       @relation(fields: [vehicleId], references: [id])
+  status          DeliveryStatus @default(PENDING_ACCEPTANCE)
+  deliveryRating  Float?
+  notes           DeliveryNote[]
+  locationHistory Json[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // New fields for delivery request flow
+  requestedAt     DateTime?     // When the delivery was requested
+  requestExpiresAt DateTime?    // When the request expires
+  declinedBy      Json?         // Store as JSON array of declined delivery persons
+  completedAt     DateTime?
+  failedAt        DateTime?
+  failureReason   String?
+  estimatedTime   Int?
+  actualTime      Int?
+  distance        Float?
+  rating          Int?
+  feedback        String?
+  deletedAt       DateTime?
+  deleted         Boolean        @default(false)
+
+  @@index([deliveryPersonId])
+  @@index([status])
+} 

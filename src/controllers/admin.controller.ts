@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '@utils/db';
 import { auth } from '@utils/auth';
 import { fromNodeHeaders } from 'better-auth/node';
+import { formatPhoneNumberForStorage, isValidPhoneNumber } from '@utils/phone';
 
 // Get all admin workers
 export const getAdminWorkers = async (req: Request, res: Response): Promise<void> => {
@@ -155,9 +156,21 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
       return;
     }
 
+    // Validate phone number format
+    if (!isValidPhoneNumber(phoneNumber)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid phone number format'
+      });
+      return;
+    }
+
+    // Format phone number for storage
+    const formattedPhoneNumber = formatPhoneNumberForStorage(phoneNumber);
+
     // Check if phone number is already registered
     const existingUser = await db.users.findUnique({
-      where: { phoneNumber }
+      where: { phoneNumber: formattedPhoneNumber }
     });
 
     if (existingUser) {
@@ -195,11 +208,11 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
     const createUserResponse = await auth.api.createUser({
       body: {
         name,
-        email: `${phoneNumber}@temp.courier-app.com`,
+        email: `${formattedPhoneNumber}@temp.courier-app.com`,
         password: Math.random().toString(36).slice(-8), // Temporary password
         role: 'DELIVERY_PERSON',
         data: {
-          phoneNumber,
+          phoneNumber: formattedPhoneNumber,
           requirePasswordChange: true
         }
       },

@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,58 +7,50 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserStatus {
-  ONLINE
-  OFFLINE
-}
-
 model Users {
-  id                  String     @id
+  id                  String            @id
   name                String
-  email               String
+  email               String            @unique
   emailVerified       Boolean
   image               String?
   createdAt           DateTime
   updatedAt           DateTime
-  phoneNumber         String?
+  phoneNumber         String?           @unique
   phoneNumberVerified Boolean?
   role                String?
-  banned              Boolean?
-  banReason           String?
   banExpires          String?
-  sessions            Session[]
-  accounts            Account[]
-  vehicles            Vehicle[]
-  deliveries          Delivery[]
-  Package             Package[]
-  status              UserStatus @default(ONLINE)
-  averageRating       Float?     @default(0)
-  completedDeliveries Int        @default(0)
-  failedDeliveries    Int        @default(0)
-  deliveryNotes       DeliveryNote[]
+  banReason           String?
+  banned              Boolean?
+  status              UserStatus        @default(ONLINE)
+  averageRating       Float?            @default(0)
+  completedDeliveries Int               @default(0)
+  failedDeliveries    Int               @default(0)
+  cancellations       Cancellation[]
   sentMessages        ChatMessage[]     @relation("SentMessages")
   readMessages        ChatMessageRead[]
-  cancellations       Cancellation[]
+  deliveries          Delivery[]        @relation("DeliveryPersonDeliveries")
+  deliveryNotes       DeliveryNote[]
+  Package             Package[]
   packageNotes        PackageNote[]
+  vehicles            Vehicle[]
+  accounts            Account[]
+  sessions            Session[]
 
-  @@unique([email])
-  @@unique([phoneNumber])
   @@map("users")
 }
 
 model Session {
   id             String   @id
   expiresAt      DateTime
-  token          String
+  token          String   @unique
   createdAt      DateTime
   updatedAt      DateTime
   ipAddress      String?
   userAgent      String?
   userId         String
-  users          Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
   impersonatedBy String?
+  users          Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([token])
   @@map("session")
 }
 
@@ -73,7 +59,6 @@ model Account {
   accountId             String
   providerId            String
   userId                String
-  users                 Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -83,6 +68,7 @@ model Account {
   password              String?
   createdAt             DateTime
   updatedAt             DateTime
+  users                 Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("account")
 }
@@ -101,7 +87,6 @@ model Verification {
 model Vehicle {
   id               String     @id @default(uuid())
   deliveryPersonId String
-  deliveryPerson   Users      @relation(fields: [deliveryPersonId], references: [id])
   type             String
   licensePlate     String
   maxWeight        Float
@@ -109,47 +94,252 @@ model Vehicle {
   currentLongitude Float?
   createdAt        DateTime   @default(now())
   deliveries       Delivery[]
+  deliveryPerson   Users      @relation(fields: [deliveryPersonId], references: [id])
+}
+
+model Location {
+  id               String            @id @default(uuid())
+  placeId          String            @unique
+  latitude         Float
+  longitude        Float
+  createdAt        DateTime          @default(now())
+  address          String
+  name             String?
+  type             LocationType
+  updatedAt        DateTime          @updatedAt
+  deliveries       Delivery[]        @relation("DeliveryLocation")
+  deliveryNotes    DeliveryNote[]
+  locationHistory  LocationHistory[]
+  packagesDelivery Package[]         @relation("DeliveryLocation")
+  packagesPickup   Package[]         @relation("PickupLocation")
+}
+
+model LocationHistory {
+  id         String   @id @default(uuid())
+  packageId  String
+  locationId String
+  timestamp  DateTime @default(now())
+  status     String
+  currentLat Float?
+  currentLng Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  location   Location @relation(fields: [locationId], references: [id])
+  package    Package  @relation(fields: [packageId], references: [id])
+
+  @@index([packageId])
+  @@index([locationId])
+  @@index([timestamp])
+}
+
+model Package {
+  id                 String            @id @default(uuid())
+  customerId         String
+  description        String
+  weight             Float
+  pickupLocationId   String
+  deliveryLocationId String
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  deleted            Boolean           @default(false)
+  deletedAt          DateTime?
+  status             PackageStatus     @default(PENDING)
+  cancellation       Cancellation?
+  ChatMessage        ChatMessage[]
+  delivery           Delivery?
+  Dispute            Dispute?
+  locationHistory    LocationHistory[]
+  customer           Users             @relation(fields: [customerId], references: [id])
+  deliveryLocation   Location          @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
+  pickupLocation     Location          @relation("PickupLocation", fields: [pickupLocationId], references: [id])
+  labels             PackageLabel[]
+  notes              PackageNote[]
+  pricing            PackagePricing?
+  timeline           PackageTimeline?
+
+  @@index([customerId])
+  @@index([pickupLocationId])
+  @@index([deliveryLocationId])
+  @@index([status])
+}
+
+model PackagePricing {
+  id           String   @id @default(uuid())
+  packageId    String   @unique
+  basePrice    Float
+  distance     Float
+  weightCharge Float
+  urgentCharge Float?
+  totalPrice   Float
+  currency     String   @default("USD")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  package      Package  @relation(fields: [packageId], references: [id])
+}
+
+model PackageTimeline {
+  id          String    @id @default(uuid())
+  packageId   String    @unique
+  created     DateTime  @default(now())
+  assigned    DateTime?
+  pickupReady DateTime?
+  pickedUp    DateTime?
+  inTransit   DateTime?
+  arriving    DateTime?
+  delivered   DateTime?
+  failed      DateTime?
+  cancelled   DateTime?
+  updatedAt   DateTime  @updatedAt
+  package     Package   @relation(fields: [packageId], references: [id])
+}
+
+model Cancellation {
+  id             String   @id @default(uuid())
+  packageId      String   @unique
+  timestamp      DateTime @default(now())
+  reason         String
+  canceledById   String
+  canceledByType String
+  refundAmount   Float
+  penaltyFee     Float
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  canceledBy     Users    @relation(fields: [canceledById], references: [id])
+  package        Package  @relation(fields: [packageId], references: [id])
+}
+
+model Dispute {
+  id                  String    @id @default(uuid())
+  packageId           String    @unique
+  type                String
+  description         String
+  evidenceUrls        String[]
+  preferredResolution String?
+  status              String    @default("PENDING")
+  resolution          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  resolvedAt          DateTime?
+  package             Package   @relation(fields: [packageId], references: [id])
+}
+
+model PackageNote {
+  id        String   @id @default(uuid())
+  packageId String
+  message   String
+  type      String
+  priority  String?
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    Users    @relation(fields: [createdBy], references: [id])
+  package   Package  @relation(fields: [packageId], references: [id])
+
+  @@index([packageId])
+  @@index([createdBy])
+}
+
+model ChatMessage {
+  id        String            @id @default(uuid())
+  packageId String
+  fromId    String
+  fromType  String
+  message   String
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  from      Users             @relation("SentMessages", fields: [fromId], references: [id])
+  package   Package           @relation(fields: [packageId], references: [id])
+  readBy    ChatMessageRead[]
+
+  @@index([packageId])
+  @@index([fromId])
+}
+
+model ChatMessageRead {
+  id        String      @id @default(uuid())
+  messageId String
+  userId    String
+  readAt    DateTime    @default(now())
+  message   ChatMessage @relation(fields: [messageId], references: [id])
+  user      Users       @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+model Delivery {
+  id              String         @id @default(uuid())
+  packageId       String         @unique
+  package         Package        @relation(fields: [packageId], references: [id])
+  deliveryPersonId String?
+  deliveryPerson  Users?         @relation("DeliveryPersonDeliveries", fields: [deliveryPersonId], references: [id])
+  vehicleId       String?
+  vehicle         Vehicle?       @relation(fields: [vehicleId], references: [id])
+  currentLocationId String?
+  currentLocation Location?      @relation("DeliveryLocation", fields: [currentLocationId], references: [id])
+  status          DeliveryStatus @default(ASSIGNED)
+  deliveryRating  Float?
+  notes           DeliveryNote[]
+  locationHistory Json[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // New fields for delivery request flow
+  requestedAt     DateTime?     // When the delivery was requested
+  requestExpiresAt DateTime?    // When the request expires
+  declinedBy      Json?         // Store as JSON array of declined delivery persons
+  completedAt     DateTime?
+  failedAt        DateTime?
+  failureReason   String?
+  estimatedTime   Int?
+  actualTime      Int?
+  distance        Float?
+  rating          Int?
+  feedback        String?
+  deletedAt       DateTime?
+  deleted         Boolean        @default(false)
+
+  @@index([deliveryPersonId])
+  @@index([currentLocationId])
+  @@index([status])
+}
+
+model DeliveryNote {
+  id         String    @id @default(uuid())
+  deliveryId String
+  actorId    String
+  note       String
+  timestamp  DateTime  @default(now())
+  actorType  String
+  locationId String?
+  actor      Users     @relation(fields: [actorId], references: [id])
+  delivery   Delivery  @relation(fields: [deliveryId], references: [id])
+  location   Location? @relation(fields: [locationId], references: [id])
+
+  @@index([deliveryId])
+  @@index([actorId])
+  @@index([locationId])
+}
+
+model PackageLabel {
+  id        String  @id @default(uuid())
+  value     String
+  label     String
+  packageId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+}
+
+enum UserStatus {
+  ONLINE
+  OFFLINE
 }
 
 enum LocationType {
   PICKUP
   DELIVERY
   WAYPOINT
-}
-
-model Location {
-  id                String            @id @default(uuid())
-  placeId           String            @unique
-  address           String
-  name              String?
-  type              LocationType
-  latitude          Float
-  longitude         Float
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  packagesPickup    Package[]         @relation("PickupLocation")
-  packagesDelivery  Package[]         @relation("DeliveryLocation")
-  locationHistory   LocationHistory[]
-  Delivery          Delivery[]
-  deliveryNotes     DeliveryNote[]
-}
-
-model LocationHistory {
-  id            String    @id @default(uuid())
-  packageId     String
-  package       Package   @relation(fields: [packageId], references: [id])
-  locationId    String
-  location      Location  @relation(fields: [locationId], references: [id])
-  timestamp     DateTime  @default(now())
-  status        String    // PICKED_UP, IN_TRANSIT, DELIVERED
-  currentLat    Float?
-  currentLng    Float?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@index([packageId])
-  @@index([locationId])
-  @@index([timestamp])
 }
 
 enum PackageStatus {
@@ -161,194 +351,11 @@ enum PackageStatus {
   CANCELLED
 }
 
-model Package {
-  id                 String           @id @default(uuid())
-  customerId         String
-  customer           Users            @relation(fields: [customerId], references: [id])
-  description        String
-  weight             Float
-  pickupLocationId   String
-  deliveryLocationId String
-  pickupLocation     Location         @relation("PickupLocation", fields: [pickupLocationId], references: [id])
-  deliveryLocation   Location         @relation("DeliveryLocation", fields: [deliveryLocationId], references: [id])
-  status             PackageStatus    @default(PENDING)
-  pricing            PackagePricing?
-  timeline           PackageTimeline?
-  cancellation       Cancellation?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  deletedAt          DateTime?        // Soft delete timestamp
-  deleted            Boolean          @default(false)  // Soft delete flag
-  delivery           Delivery?
-  labels             PackageLabel[]
-  locationHistory    LocationHistory[]
-  notes              PackageNote[]
-
-  @@index([customerId])
-  @@index([pickupLocationId])
-  @@index([deliveryLocationId])
-  @@index([status])
-  Dispute Dispute[]
-  ChatMessage ChatMessage[]
-}
-
-model PackagePricing {
-  id            String   @id @default(uuid())
-  packageId     String   @unique
-  package       Package  @relation(fields: [packageId], references: [id])
-  basePrice     Float
-  distance      Float
-  weightCharge  Float
-  urgentCharge  Float?
-  totalPrice    Float
-  currency      String   @default("USD")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-}
-
-model PackageTimeline {
-  id           String    @id @default(uuid())
-  packageId    String    @unique
-  package      Package   @relation(fields: [packageId], references: [id])
-  created      DateTime  @default(now())
-  assigned     DateTime?
-  pickupReady  DateTime?
-  pickedUp     DateTime?
-  inTransit    DateTime?
-  arriving     DateTime?
-  delivered    DateTime?
-  failed       DateTime?
-  cancelled    DateTime?
-  updatedAt    DateTime  @updatedAt
-}
-
-model Cancellation {
-  id           String    @id @default(uuid())
-  packageId    String    @unique
-  package      Package   @relation(fields: [packageId], references: [id])
-  timestamp    DateTime  @default(now())
-  reason       String
-  canceledById String
-  canceledBy   Users     @relation(fields: [canceledById], references: [id])
-  canceledByType String  // CUSTOMER, DELIVERY_PERSON, ADMIN
-  refundAmount Float
-  penaltyFee   Float
-  note         String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-}
-
-model Dispute {
-  id                String    @id @default(uuid())
-  packageId         String    @unique
-  package           Package   @relation(fields: [packageId], references: [id])
-  type              String    // DAMAGE, DELAY, BEHAVIOR, OTHER
-  description       String
-  evidenceUrls      String[]
-  preferredResolution String?
-  status            String    @default("PENDING") // PENDING, IN_REVIEW, RESOLVED
-  resolution        String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  resolvedAt        DateTime?
-}
-
-model PackageNote {
-  id        String   @id @default(uuid())
-  packageId String
-  package   Package  @relation(fields: [packageId], references: [id])
-  message   String
-  type      String   // INTERNAL, CUSTOMER_VISIBLE, DELIVERY_PERSON_VISIBLE
-  priority  String?  // LOW, MEDIUM, HIGH
-  createdBy String
-  author    Users    @relation(fields: [createdBy], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([packageId])
-  @@index([createdBy])
-}
-
-model ChatMessage {
-  id        String   @id @default(uuid())
-  packageId String
-  package   Package  @relation(fields: [packageId], references: [id])
-  fromId    String
-  from      Users    @relation("SentMessages", fields: [fromId], references: [id])
-  fromType  String   // CUSTOMER, DELIVERY_PERSON, SUPPORT
-  message   String
-  readBy    ChatMessageRead[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([packageId])
-  @@index([fromId])
-}
-
-model ChatMessageRead {
-  id        String   @id @default(uuid())
-  messageId String
-  message   ChatMessage @relation(fields: [messageId], references: [id])
-  userId    String
-  user      Users    @relation(fields: [userId], references: [id])
-  readAt    DateTime @default(now())
-
-  @@unique([messageId, userId])
-  @@index([messageId])
-  @@index([userId])
-}
-
-model Delivery {
-  id                    String         @id @default(uuid())
-  packageId             String         @unique
-  package               Package        @relation(fields: [packageId], references: [id])
-  deliveryPersonId      String
-  deliveryPerson        Users          @relation(fields: [deliveryPersonId], references: [id])
-  vehicleId             String
-  vehicle               Vehicle        @relation(fields: [vehicleId], references: [id])
-  pickupTime            DateTime?
-  deliveryTime          DateTime?
-  estimatedDeliveryTime DateTime?
-  currentLocationId     String?
-  currentLocation       Location?      @relation(fields: [currentLocationId], references: [id])
-  status                DeliveryStatus
-  createdAt             DateTime       @default(now())
-  notes                 DeliveryNote[]
-  deliveryRating       Float?         // Rating given by customer
-}
-
 enum DeliveryStatus {
+  PENDING_ACCEPTANCE
   ASSIGNED
   IN_PROGRESS
   COMPLETED
   FAILED
   DECLINED
-}
-
-// New model for delivery notes and history
-model DeliveryNote {
-  id            String   @id @default(uuid())
-  deliveryId    String
-  delivery      Delivery @relation(fields: [deliveryId], references: [id])
-  actorId       String
-  actor         Users    @relation(fields: [actorId], references: [id])
-  note          String
-  timestamp     DateTime @default(now())
-  actorType     String   // CUSTOMER, DELIVERY_PERSON, ADMIN
-  locationId    String?
-  location      Location? @relation(fields: [locationId], references: [id])
-
-  @@index([deliveryId])
-  @@index([actorId])
-  @@index([locationId])
-}
-
-// New model to handle package labels
-model PackageLabel {
-  id    String @id @default(uuid())
-  value String
-  label String
-
-  packageId String
-  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
 }

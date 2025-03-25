@@ -264,4 +264,57 @@ export const emitDashboardTopDeliveryPersonsUpdate = (deliveryPersons: TopDelive
         timestamp: new Date(),
         deliveryPersons
     });
+};
+
+// New event types for delivery request flow
+export interface DeliveryRequestEvent {
+  packageId: string;
+  timestamp: Date;
+  expiresAt: Date;
+  pickupLocation: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  deliveryLocation: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  };
+  package: {
+    description: string;
+    weight: number;
+    priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  };
+}
+
+export interface DeliveryResponseEvent {
+  packageId: string;
+  timestamp: Date;
+  deliveryPersonId: string;
+  response: 'ACCEPT' | 'DECLINE';
+  reason?: string;
+}
+
+// New emission functions
+export const emitDeliveryRequest = (data: DeliveryRequestEvent): void => {
+  if (!io) {
+    console.error('WebSocket not initialized');
+    return;
+  }
+
+  io.to('available_delivery_persons').emit('package:delivery_request', data);
+
+  console.log(`Emitting delivery request for package ${data.packageId}`);
+};
+
+export const emitDeliveryResponse = (packageId: string, data: DeliveryResponseEvent): void => {
+  if (!io) {
+    console.error('WebSocket not initialized');
+    return;
+  }
+
+  io.to(`package:${packageId}`).emit('package:delivery_response', data);
+
+  console.log(`Emitting delivery response for package ${packageId}: ${data.response}`);
 }; 
