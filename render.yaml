@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: courier-server
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: false
+    websocket: true 

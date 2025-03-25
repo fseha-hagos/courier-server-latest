@@ -22,6 +22,11 @@ const server = createServer(app);
 // Initialize WebSocket
 initializeWebSocket(server);
 
+// Health check endpoint for Render
+app.get('/api/health', (req: Request, res: Response) => {
+    res.status(200).json({ status: 'healthy' });
+});
+
 // =========================================
 // Middleware Configuration
 // =========================================

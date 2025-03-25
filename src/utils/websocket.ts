@@ -12,10 +12,13 @@ export const initializeWebSocket = (server: HttpServer) => {
             credentials: true,
             allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
         },
-        transports: ['websocket', 'polling'],
+        transports: ['websocket'],
         allowEIO3: true,
         pingTimeout: 60000,
-        pingInterval: 25000
+        pingInterval: 25000,
+        path: '/socket.io/',
+        connectTimeout: 45000,
+        maxHttpBufferSize: 1e8
     });
 
     io.on('connection', (socket: Socket) => {
