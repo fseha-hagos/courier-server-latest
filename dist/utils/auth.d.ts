@@ -420,8 +420,8 @@ export declare const auth: {
                         image?: string | null | undefined | undefined;
                         banned: boolean | null | undefined;
                         role?: string | null | undefined;
-                        banReason?: string | null | undefined;
                         banExpires?: Date | null | undefined;
+                        banReason?: string | null | undefined;
                         vehicles?: string[] | null | undefined;
                         deliveries?: string[] | null | undefined;
                     };
@@ -479,8 +479,8 @@ export declare const auth: {
                     image?: string | null | undefined | undefined;
                     banned: boolean | null | undefined;
                     role?: string | null | undefined;
-                    banReason?: string | null | undefined;
                     banExpires?: Date | null | undefined;
+                    banReason?: string | null | undefined;
                     vehicles?: string[] | null | undefined;
                     deliveries?: string[] | null | undefined;
                 };
@@ -6639,8 +6639,8 @@ export declare const auth: {
                 phoneNumberVerified?: boolean | null | undefined;
                 banned: boolean | null | undefined;
                 role?: string | null | undefined;
-                banReason?: string | null | undefined;
                 banExpires?: Date | null | undefined;
+                banReason?: string | null | undefined;
             };
         };
     };

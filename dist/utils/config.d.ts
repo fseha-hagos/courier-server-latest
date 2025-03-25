@@ -1,7 +1,7 @@
 export declare const config: {
     readonly port: string | 3000;
     readonly nodeEnv: string;
-    readonly frontendUrl: string;
+    readonly frontendUrl: string[];
     readonly databaseUrl: string | undefined;
     readonly jwtSecret: string;
     readonly googleMapsApiKey: string | undefined;

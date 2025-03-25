@@ -10,9 +10,9 @@ export declare const updateDeliveryPersonStatus: (userId: string, status: UserSt
     phoneNumber: string | null;
     phoneNumberVerified: boolean | null;
     role: string | null;
-    banned: boolean | null;
-    banReason: string | null;
     banExpires: string | null;
+    banReason: string | null;
+    banned: boolean | null;
     status: import(".prisma/client").$Enums.UserStatus;
     averageRating: number | null;
     completedDeliveries: number;
@@ -29,9 +29,9 @@ export declare const getDeliveryPersons: () => Promise<{
     phoneNumber: string | null;
     phoneNumberVerified: boolean | null;
     role: string | null;
-    banned: boolean | null;
-    banReason: string | null;
     banExpires: string | null;
+    banReason: string | null;
+    banned: boolean | null;
     status: import(".prisma/client").$Enums.UserStatus;
     averageRating: number | null;
     completedDeliveries: number;

@@ -2,11 +2,38 @@ import { Request, Response } from 'express';
 import { db } from "@utils/db";
 import { locationService, LocationStatus } from "@utils/location";
 import calculateDistances from "@utils/distanceMatrix";
-import { DeliveryStatus, PackageStatus, Users, Vehicle, Location, UserStatus } from '@prisma/client';
+import { DeliveryStatus, PackageStatus, Users, Vehicle, Location, UserStatus, Delivery } from '@prisma/client';
 import calculateEstimatedDeliveryTime from "@utils/distanceMatrix";
 import { emitPackageUpdate, emitPackageCancelled, STATUS_TRANSITIONS } from '@utils/websocket';
 import { emitDashboardStatsUpdate, emitDeliveryRequest, emitDeliveryResponse } from '@utils/websocket';
-import { AuthenticatedRequest } from '@types/express';
+import { PrismaClient } from '@prisma/client';
+
+// Define AuthenticatedRequest interface
+interface AuthenticatedRequest extends Request {
+    user?: {
+        id: string;
+        role: string;
+    };
+}
+
+// Define delivery with relations type
+type DeliveryWithRelations = Delivery & {
+    deliveryPerson: Users | null;
+    vehicle: Vehicle | null;
+    package: {
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        status: PackageStatus;
+        deletedAt: Date | null;
+        deleted: boolean;
+        customerId: string;
+        description: string;
+        weight: number;
+        pickupLocationId: string;
+        deliveryLocationId: string;
+    };
+};
 
 // Status mapping between package and delivery
 const PACKAGE_DELIVERY_STATUS_MAP: Record<PackageStatus, DeliveryStatus | null> = {
@@ -1038,7 +1065,7 @@ export const rateDelivery = async (req: Request, res: Response): Promise<void> =
         });
 
         // Add rating comment if provided
-        if (comment) {
+        if (comment && delivery.deliveryPersonId) {
             await db.deliveryNote.create({
                 data: {
                     deliveryId: delivery.id,
@@ -1066,20 +1093,22 @@ export const rateDelivery = async (req: Request, res: Response): Promise<void> =
         );
         const averageRating = totalRatings / (deliveryPersonRatings.length || 1);
 
-        await db.users.update({
-            where: { id: delivery.deliveryPersonId },
-            data: { 
-                averageRating: averageRating
-            }
-        });
+        if (delivery.deliveryPersonId) {
+            await db.users.update({
+                where: { id: delivery.deliveryPersonId },
+                data: { 
+                    averageRating: averageRating
+                }
+            });
+        }
 
         res.status(200).json({
             success: true,
             delivery: updatedDelivery,
-            deliveryPerson: {
+            deliveryPerson: delivery.deliveryPersonId ? {
                 id: delivery.deliveryPersonId,
                 averageRating: averageRating
-            }
+            } : undefined
         });
     } catch (error: any) {
         console.error('Error rating delivery:', error);
@@ -1561,20 +1590,23 @@ export const assignPackage = async (req: Request, res: Response): Promise<void> 
           successRate
         });
 
+        // Fix the delivery person data access with proper null checks
+        const deliveryPersonData = delivery?.deliveryPerson ? {
+            id: delivery.deliveryPerson.id,
+            name: delivery.deliveryPerson.name,
+            vehicle: delivery.vehicle ? {
+                type: delivery.vehicle.type,
+                plateNumber: delivery.vehicle.licensePlate
+            } : undefined
+        } : undefined;
+
         res.status(200).json({
             success: true,
             package: updatedPackage,
             assignment: {
                 id: delivery.id,
                 timestamp: delivery.createdAt,
-                deliveryPerson: {
-                    id: delivery.deliveryPerson.id,
-                    name: delivery.deliveryPerson.name,
-                    vehicle: {
-                        type: delivery.vehicle.type,
-                        plateNumber: delivery.vehicle.licensePlate
-                    }
-                }
+                deliveryPerson: deliveryPersonData
             }
         });
     } catch (error: any) {
@@ -1835,14 +1867,27 @@ export const handleDeliveryResponse = async (req: AuthenticatedRequest, res: Res
   try {
     const { id: packageId } = req.params;
     const { response, reason } = req.body;
-    const deliveryPersonId = req.user.id;
+    
+    if (!req.user?.id) {
+        res.status(401).json({
+            success: false,
+            error: {
+                code: 'UNAUTHORIZED',
+                message: 'User not authenticated'
+            }
+        });
+        return;
+    }
 
+    const deliveryPersonId = req.user.id;
     const delivery = await db.delivery.findUnique({
       where: { packageId },
       include: {
-        package: true
+        package: true,
+        deliveryPerson: true,
+        vehicle: true
       }
-    });
+    }) as DeliveryWithRelations | null;
 
     if (!delivery) {
       res.status(404).json({
@@ -2006,10 +2051,24 @@ export const handleDeliveryResponse = async (req: AuthenticatedRequest, res: Res
         successRate
       });
 
+      const deliveryPersonData = delivery?.deliveryPerson ? {
+          id: delivery.deliveryPerson.id,
+          name: delivery.deliveryPerson.name,
+          vehicle: delivery.vehicle ? {
+              type: delivery.vehicle.type,
+              plateNumber: delivery.vehicle.licensePlate
+          } : undefined
+      } : undefined;
+
       res.status(200).json({
         success: true,
         delivery: updatedDelivery,
-        package: updatedPackage
+        package: updatedPackage,
+        assignment: {
+            id: delivery.id,
+            timestamp: delivery.createdAt,
+            deliveryPerson: deliveryPersonData
+        }
       });
     }
   } catch (error: any) {

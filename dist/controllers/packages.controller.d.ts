@@ -1,4 +1,10 @@
 import { Request, Response } from 'express';
+interface AuthenticatedRequest extends Request {
+    user?: {
+        id: string;
+        role: string;
+    };
+}
 export declare const getPackages: (req: Request, res: Response) => Promise<void>;
 export declare const getPackageById: (req: Request, res: Response) => Promise<void>;
 export declare const createPackage: (req: Request, res: Response) => Promise<void>;
@@ -25,4 +31,7 @@ export declare enum PackageErrorCodes {
 export declare const updatePackageStatus: (req: Request, res: Response) => Promise<void>;
 export declare const assignPackage: (req: Request, res: Response) => Promise<void>;
 export declare const cancelPackage: (req: Request, res: Response) => Promise<void>;
+export declare const requestDelivery: (req: Request, res: Response) => Promise<void>;
+export declare const handleDeliveryResponse: (req: AuthenticatedRequest, res: Response) => Promise<void>;
+export {};
 //# sourceMappingURL=packages.controller.d.ts.map

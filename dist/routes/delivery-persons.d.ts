@@ -3,6 +3,36 @@ declare const router: import("express-serve-static-core").Router;
  * @swagger
  * components:
  *   schemas:
+ *     DeliveryPerson:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: string
+ *         name:
+ *           type: string
+ *         phoneNumber:
+ *           type: string
+ *         status:
+ *           type: string
+ *           enum: [ONLINE, OFFLINE]
+ *         currentLocation:
+ *           $ref: '#/components/schemas/Location'
+ *         averageRating:
+ *           type: number
+ *         completedDeliveries:
+ *           type: integer
+ *         vehicle:
+ *           type: object
+ *           properties:
+ *             id:
+ *               type: string
+ *             type:
+ *               type: string
+ *             licensePlate:
+ *               type: string
+ *             maxWeight:
+ *               type: number
+ *
  *     Delivery:
  *       type: object
  *       properties:

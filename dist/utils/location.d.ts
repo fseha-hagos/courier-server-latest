@@ -40,9 +40,9 @@ export declare const locationService: {
             updatedAt: Date;
             type: import(".prisma/client").$Enums.LocationType;
             placeId: string;
-            address: string;
             latitude: number;
             longitude: number;
+            address: string;
         };
     } & {
         id: string;
@@ -65,8 +65,8 @@ export declare const locationService: {
     getFrequentLocations: (limit?: number) => Promise<{
         useCount: number;
         _count: {
-            packagesPickup: number;
             packagesDelivery: number;
+            packagesPickup: number;
         };
         name: string | null;
         id: string;
@@ -74,9 +74,9 @@ export declare const locationService: {
         updatedAt: Date;
         type: import(".prisma/client").$Enums.LocationType;
         placeId: string;
-        address: string;
         latitude: number;
         longitude: number;
+        address: string;
     }[]>;
 };
 export declare const LocationStatus: {
