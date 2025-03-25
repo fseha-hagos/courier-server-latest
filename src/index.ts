@@ -15,6 +15,7 @@ import deliveryPersonsRouter from "@routes/delivery-persons"; // Delivery Person
 import adminRouter from "@routes/admin";
 import customersRouter from "@routes/customers";
 import dashboardRouter from "@routes/dashboard"; // Dashboard routes
+import { initializeKeepAlive } from "@utils/keep-alive";
 
 const app = express();
 const server = createServer(app);
@@ -204,6 +205,9 @@ app.use((req: Request, res: Response) => {
 // =========================================
 
 const PORT = process.env.PORT || 3000;
+
+// Initialize keep-alive mechanism
+initializeKeepAlive();
 
 server.listen(PORT, () => {
   console.log(`

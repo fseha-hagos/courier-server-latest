@@ -320,4 +320,4 @@ export const emitDeliveryResponse = (packageId: string, data: DeliveryResponseEv
   io.to(`package:${packageId}`).emit('package:delivery_response', data);
 
   console.log(`Emitting delivery response for package ${packageId}: ${data.response}`);
-}; 
+};

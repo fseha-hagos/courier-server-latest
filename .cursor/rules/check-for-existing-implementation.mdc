@@ -1,0 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# When i request an edit or new feature, Always check for existing implementation.
+Example: - instead of initializing something twice, check if we already have existing implementation first
