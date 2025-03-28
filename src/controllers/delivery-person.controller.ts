@@ -240,7 +240,6 @@ export const initiatePhoneVerification = async (req: Request, res: Response): Pr
 
     // Forward the request to Better-Auth's phone verification endpoint
     const response = await auth.api.sendPhoneNumberOTP({
-      method: 'POST',
       headers: fromNodeHeaders(req.headers),
       body: { phoneNumber: formattedPhoneNumber }
     });
@@ -308,7 +307,6 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
 
     // Forward the verification request to Better-Auth
     const response = await auth.api.verifyPhoneNumber({
-      method: 'POST',
       headers: fromNodeHeaders(req.headers),
       body: { phoneNumber: formattedPhoneNumber, code }
     });
