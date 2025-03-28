@@ -204,7 +204,7 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
       return;
     }
 
-    // Create temporary user with phone verification pending
+    // Create user with phone verification pending
     const createUserResponse = await auth.api.createUser({
       body: {
         name,
@@ -213,7 +213,8 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
         role: 'DELIVERY_PERSON',
         data: {
           phoneNumber: formattedPhoneNumber,
-          requirePasswordChange: true
+          requirePasswordChange: true,
+          phoneNumberVerified: false // Explicitly set as unverified
         }
       },
       headers: fromNodeHeaders(req.headers)
@@ -229,12 +230,9 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
       }
     });
 
-    // Send OTP via the phone number plugin (this is handled automatically by the plugin)
-    // The plugin will handle the verification process when the user submits the OTP
-
     res.status(201).json({
       success: true,
-      message: 'Delivery person registration initiated. Verification code will be sent to phone.',
+      message: 'Delivery person registered successfully. They will need to verify their phone number through the courier app.',
       deliveryPerson: {
         id: createUserResponse.user.id,
         name,
@@ -244,17 +242,9 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
     });
   } catch (error: any) {
     console.error('Error registering delivery person:', error);
-    // Log more details about the error
-    if (error.status === 'UNAUTHORIZED') {
-      console.error('Authentication error details:', {
-        headers: req.headers,
-        error: error.message
-      });
-    }
     res.status(500).json({
       success: false,
-      error: 'Failed to register delivery person',
-      details: error.message
+      error: 'Failed to register delivery person'
     });
   }
 }; 

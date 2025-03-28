@@ -6,6 +6,9 @@ import {
   updateLocation,
   getCurrentDeliveries,
   getDeliveryHistory,
+  initiatePhoneVerification,
+  setDeliveryPersonPassword,
+  verifyOTP,
 } from '@controllers/delivery-person.controller';
 
 const router = Router();
@@ -306,6 +309,126 @@ router.get('/:id/current-deliveries', getCurrentDeliveries);
  *         description: Server error
  */
 router.get('/:id/delivery-history', getDeliveryHistory);
+
+/**
+ * @swagger
+ * /api/delivery-persons/verify-phone:
+ *   post:
+ *     summary: Initiate phone verification for courier
+ *     tags: [Delivery Persons]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *                 description: Courier's phone number
+ *     responses:
+ *       200:
+ *         description: Verification code sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Verification code sent successfully
+ *       400:
+ *         description: Invalid phone number or user not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/verify-phone', initiatePhoneVerification);
+
+/**
+ * @swagger
+ * /api/delivery-persons/set-password:
+ *   post:
+ *     summary: Set password for delivery person after phone verification
+ *     tags: [Delivery Persons]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               newPassword:
+ *                 type: string
+ *                 description: New password to set
+ *     responses:
+ *       200:
+ *         description: Password set successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Password set successfully
+ *       401:
+ *         description: Unauthorized or no valid session
+ *       400:
+ *         description: Invalid request data
+ *       500:
+ *         description: Server error
+ */
+router.post('/set-password', setDeliveryPersonPassword);
+
+/**
+ * @swagger
+ * /api/delivery-persons/verify-otp:
+ *   post:
+ *     summary: Verify OTP for courier phone verification
+ *     tags: [Delivery Persons]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - phoneNumber
+ *               - code
+ *             properties:
+ *               phoneNumber:
+ *                 type: string
+ *                 description: Courier's phone number
+ *               code:
+ *                 type: string
+ *                 description: OTP code received via SMS
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                   example: Phone number verified successfully
+ *       400:
+ *         description: Invalid phone number, code, or user not found
+ *       500:
+ *         description: Server error
+ */
+router.post('/verify-otp', verifyOTP);
 
 /**
  * @swagger

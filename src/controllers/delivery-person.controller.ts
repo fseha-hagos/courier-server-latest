@@ -2,6 +2,9 @@ import { Request, Response } from 'express';
 import { UserStatus } from '@prisma/client';
 import { db } from '@utils/db';
 import { updateDeliveryPersonStatus, getDeliveryPersons } from '@services/deliveryPerson';
+import { isValidPhoneNumber, formatPhoneNumberForStorage } from '@utils/phone';
+import { auth } from '@utils/auth';
+import { fromNodeHeaders } from 'better-auth/node';
 
 // Get all delivery persons with their current status and vehicle info
 export const getAllDeliveryPersons = async (req: Request, res: Response): Promise<void> => {
@@ -179,5 +182,216 @@ export const getDeliveryHistory = async (req: Request, res: Response): Promise<v
   } catch (error) {
     console.error('Error fetching delivery history:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch delivery history' });
+  }
+};
+
+/**
+ * Initiate phone verification for courier
+ */
+export const initiatePhoneVerification = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phoneNumber } = req.body;
+
+    // Validate phone number format
+    if (!isValidPhoneNumber(phoneNumber)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid phone number format'
+      });
+      return;
+    }
+
+    // Format phone number for storage
+    const formattedPhoneNumber = formatPhoneNumberForStorage(phoneNumber);
+
+    // Check if user exists and is a delivery person
+    const user = await db.users.findUnique({
+      where: { 
+        phoneNumber: formattedPhoneNumber,
+        role: 'DELIVERY_PERSON'
+      }
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        error: 'No delivery person found with this phone number'
+      });
+      return;
+    }
+
+    // Check if user is banned
+    if (user.banned) {
+      res.status(403).json({
+        success: false,
+        error: 'This account has been banned'
+      });
+      return;
+    }
+
+    // Check if phone is already verified
+    if (user.phoneNumberVerified) {
+      res.status(400).json({
+        success: false,
+        error: 'Phone number is already verified'
+      });
+      return;
+    }
+
+    // Forward the request to Better-Auth's phone verification endpoint
+    const response = await auth.api.sendPhoneNumberOTP({
+      method: 'POST',
+      headers: fromNodeHeaders(req.headers),
+      body: { phoneNumber: formattedPhoneNumber }
+    });
+
+    if (!response.code) {
+      throw new Error('Failed to send verification code');
+    }
+    console.log("Delivery Person Controller, response: ", response);
+    res.status(200).json({
+      success: true,
+      message: 'Verification code sent successfully'
+    });
+  } catch (error) {
+    console.error('Error initiating phone verification:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to send verification code'
+    });
+  }
+};
+
+/**
+ * Verify OTP for courier phone verification
+ */
+export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phoneNumber, code } = req.body;
+
+    // Validate phone number format
+    if (!isValidPhoneNumber(phoneNumber)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid phone number format'
+      });
+      return;
+    }
+
+    // Format phone number for storage
+    const formattedPhoneNumber = formatPhoneNumberForStorage(phoneNumber);
+
+    // Check if user exists and is a delivery person
+    const user = await db.users.findUnique({
+      where: { 
+        phoneNumber: formattedPhoneNumber,
+        role: 'DELIVERY_PERSON'
+      }
+    });
+
+    if (!user) {
+      res.status(400).json({
+        success: false,
+        error: 'No delivery person found with this phone number'
+      });
+      return;
+    }
+
+    // Check if user is banned
+    if (user.banned) {
+      res.status(403).json({
+        success: false,
+        error: 'This account has been banned'
+      });
+      return;
+    }
+
+    // Forward the verification request to Better-Auth
+    const response = await auth.api.verifyPhoneNumber({
+      method: 'POST',
+      headers: fromNodeHeaders(req.headers),
+      body: { phoneNumber: formattedPhoneNumber, code }
+    });
+
+    if (!response?.token) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to verify code'
+      });
+      return;
+    }
+
+    // Update user's phone verification status
+    await db.users.update({
+      where: { id: user.id },
+      data: { phoneNumberVerified: true }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Phone number verified successfully'
+    });
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to verify code'
+    });
+  }
+};
+
+/**
+ * Set password for delivery person after phone verification
+ */
+export const setDeliveryPersonPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+      res.status(400).json({
+        success: false,
+        error: 'New password is required'
+      });
+      return;
+    }
+
+    // Get the current session
+    const session = await auth.api.getSession({
+      headers: fromNodeHeaders(req.headers)
+    });
+
+    if (!session) {
+      res.status(401).json({
+        success: false,
+        error: 'Unauthorized: No valid session found'
+      });
+      return;
+    }
+
+    // Verify user is a delivery person
+    if (session.user.role !== 'DELIVERY_PERSON') {
+      res.status(403).json({
+        success: false,
+        error: 'Forbidden: Only delivery persons can set their password'
+      });
+      return;
+    }
+
+    // Set the new password
+    await auth.api.setPassword({
+      body: { newPassword },
+      headers: fromNodeHeaders(req.headers)
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Password set successfully'
+    });
+  } catch (error) {
+    console.error('Error setting delivery person password:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to set password'
+    });
   }
 };
