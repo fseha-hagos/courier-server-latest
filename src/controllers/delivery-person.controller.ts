@@ -1,17 +1,23 @@
-import { Request, Response } from 'express';
-import { UserStatus } from '@prisma/client';
-import { db } from '@utils/db';
-import { updateDeliveryPersonStatus, getDeliveryPersons } from '@services/deliveryPerson';
-import { isValidPhoneNumber, formatPhoneNumberForStorage } from '@utils/phone';
-import { auth } from '@utils/auth';
-import { fromNodeHeaders } from 'better-auth/node';
+import { Request, Response } from "express";
+import { UserStatus } from "@prisma/client";
+import { db } from "@utils/db";
+import {
+  updateDeliveryPersonStatus,
+  getDeliveryPersons,
+} from "@services/deliveryPerson";
+import { isValidPhoneNumber, formatPhoneNumberForStorage } from "@utils/phone";
+import { auth } from "@utils/auth";
+import { fromNodeHeaders } from "better-auth/node";
 
 // Get all delivery persons with their current status and vehicle info
-export const getAllDeliveryPersons = async (req: Request, res: Response): Promise<void> => {
+export const getAllDeliveryPersons = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const deliveryPersons = await db.users.findMany({
       where: {
-        role: 'DELIVERY_PERSON',
+        role: "DELIVERY_PERSON",
       },
       include: {
         vehicles: true,
@@ -24,13 +30,18 @@ export const getAllDeliveryPersons = async (req: Request, res: Response): Promis
     });
     res.status(200).json({ success: true, deliveryPersons });
   } catch (error) {
-    console.error('Error fetching delivery persons:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch delivery persons' });
+    console.error("Error fetching delivery persons:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch delivery persons" });
   }
 };
 
 // Get a single delivery person by ID
-export const getDeliveryPersonById = async (req: Request, res: Response): Promise<void> => {
+export const getDeliveryPersonById = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const deliveryPerson = await db.users.findUnique({
@@ -46,44 +57,64 @@ export const getDeliveryPersonById = async (req: Request, res: Response): Promis
     });
 
     if (!deliveryPerson) {
-      res.status(404).json({ success: false, error: 'Delivery person not found' });
+      res
+        .status(404)
+        .json({ success: false, error: "Delivery person not found" });
       return;
     }
 
     res.status(200).json({ success: true, deliveryPerson });
   } catch (error) {
-    console.error('Error fetching delivery person:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch delivery person' });
+    console.error("Error fetching delivery person:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch delivery person" });
   }
 };
 
 // Update delivery person status (ONLINE/OFFLINE)
-export const updateStatus = async (req: Request, res: Response): Promise<void> => {
+export const updateStatus = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const { status } = req.body;
 
     if (!Object.values(UserStatus).includes(status)) {
-      res.status(400).json({ success: false, error: 'Invalid status value' });
+      res.status(400).json({ success: false, error: "Invalid status value" });
       return;
     }
 
     const updatedPerson = await updateDeliveryPersonStatus(id, status);
     res.status(200).json({ success: true, deliveryPerson: updatedPerson });
   } catch (error) {
-    console.error('Error updating delivery person status:', error);
-    res.status(500).json({ success: false, error: 'Failed to update delivery person status' });
+    console.error("Error updating delivery person status:", error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Failed to update delivery person status",
+      });
   }
 };
 
 // Update delivery person's current location
-export const updateLocation = async (req: Request, res: Response): Promise<void> => {
+export const updateLocation = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const { latitude, longitude, vehicleId } = req.body;
 
     if (!latitude || !longitude || !vehicleId) {
-      res.status(400).json({ success: false, error: 'Latitude, longitude and vehicleId are required' });
+      res
+        .status(400)
+        .json({
+          success: false,
+          error: "Latitude, longitude and vehicleId are required",
+        });
       return;
     }
 
@@ -97,13 +128,18 @@ export const updateLocation = async (req: Request, res: Response): Promise<void>
 
     res.status(200).json({ success: true, vehicle: updatedVehicle });
   } catch (error) {
-    console.error('Error updating delivery person location:', error);
-    res.status(500).json({ success: false, error: 'Failed to update location' });
+    console.error("Error updating delivery person location:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to update location" });
   }
 };
 
 // Get delivery person's current deliveries
-export const getCurrentDeliveries = async (req: Request, res: Response): Promise<void> => {
+export const getCurrentDeliveries = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
 
@@ -111,7 +147,7 @@ export const getCurrentDeliveries = async (req: Request, res: Response): Promise
       where: {
         deliveryPersonId: id,
         status: {
-          in: ['ASSIGNED', 'IN_PROGRESS'],
+          in: ["ASSIGNED", "IN_PROGRESS"],
         },
       },
       include: {
@@ -126,13 +162,18 @@ export const getCurrentDeliveries = async (req: Request, res: Response): Promise
 
     res.status(200).json({ success: true, deliveries });
   } catch (error) {
-    console.error('Error fetching current deliveries:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch current deliveries' });
+    console.error("Error fetching current deliveries:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch current deliveries" });
   }
 };
 
 // Get delivery person's delivery history
-export const getDeliveryHistory = async (req: Request, res: Response): Promise<void> => {
+export const getDeliveryHistory = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { id } = req.params;
     const { page = 1, limit = 10 } = req.query;
@@ -142,7 +183,7 @@ export const getDeliveryHistory = async (req: Request, res: Response): Promise<v
       where: {
         deliveryPersonId: id,
         status: {
-          in: ['COMPLETED', 'FAILED', 'DECLINED'],
+          in: ["COMPLETED", "FAILED", "DECLINED"],
         },
       },
       include: {
@@ -156,7 +197,7 @@ export const getDeliveryHistory = async (req: Request, res: Response): Promise<v
       skip,
       take: Number(limit),
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
     });
 
@@ -164,7 +205,7 @@ export const getDeliveryHistory = async (req: Request, res: Response): Promise<v
       where: {
         deliveryPersonId: id,
         status: {
-          in: ['COMPLETED', 'FAILED', 'DECLINED'],
+          in: ["COMPLETED", "FAILED", "DECLINED"],
         },
       },
     });
@@ -180,15 +221,20 @@ export const getDeliveryHistory = async (req: Request, res: Response): Promise<v
       },
     });
   } catch (error) {
-    console.error('Error fetching delivery history:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch delivery history' });
+    console.error("Error fetching delivery history:", error);
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch delivery history" });
   }
 };
 
 /**
  * Initiate phone verification for courier
  */
-export const initiatePhoneVerification = async (req: Request, res: Response): Promise<void> => {
+export const initiatePhoneVerification = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { phoneNumber } = req.body;
 
@@ -196,7 +242,7 @@ export const initiatePhoneVerification = async (req: Request, res: Response): Pr
     if (!isValidPhoneNumber(phoneNumber)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid phone number format'
+        error: "Invalid phone number format",
       });
       return;
     }
@@ -206,16 +252,16 @@ export const initiatePhoneVerification = async (req: Request, res: Response): Pr
 
     // Check if user exists and is a delivery person
     const user = await db.users.findUnique({
-      where: { 
+      where: {
         phoneNumber: formattedPhoneNumber,
-        role: 'DELIVERY_PERSON'
-      }
+        role: "DELIVERY_PERSON",
+      },
     });
 
     if (!user) {
       res.status(400).json({
         success: false,
-        error: 'No delivery person found with this phone number'
+        error: "No delivery person found with this phone number",
       });
       return;
     }
@@ -224,7 +270,7 @@ export const initiatePhoneVerification = async (req: Request, res: Response): Pr
     if (user.banned) {
       res.status(403).json({
         success: false,
-        error: 'This account has been banned'
+        error: "This account has been banned",
       });
       return;
     }
@@ -233,7 +279,7 @@ export const initiatePhoneVerification = async (req: Request, res: Response): Pr
     if (user.phoneNumberVerified) {
       res.status(400).json({
         success: false,
-        error: 'Phone number is already verified'
+        error: "Phone number is already verified",
       });
       return;
     }
@@ -241,22 +287,22 @@ export const initiatePhoneVerification = async (req: Request, res: Response): Pr
     // Forward the request to Better-Auth's phone verification endpoint
     const response = await auth.api.sendPhoneNumberOTP({
       headers: fromNodeHeaders(req.headers),
-      body: { phoneNumber: formattedPhoneNumber }
+      body: { phoneNumber: formattedPhoneNumber },
     });
 
     if (!response.code) {
-      throw new Error('Failed to send verification code');
+      throw new Error("Failed to send verification code");
     }
     console.log("Delivery Person Controller, response: ", response);
     res.status(200).json({
       success: true,
-      message: 'Verification code sent successfully'
+      message: "Verification code sent successfully",
     });
   } catch (error) {
-    console.error('Error initiating phone verification:', error);
+    console.error("Error initiating phone verification:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to send verification code'
+      error: "Failed to send verification code",
     });
   }
 };
@@ -272,7 +318,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
     if (!isValidPhoneNumber(phoneNumber)) {
       res.status(400).json({
         success: false,
-        error: 'Invalid phone number format'
+        error: "Invalid phone number format",
       });
       return;
     }
@@ -282,16 +328,16 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
 
     // Check if user exists and is a delivery person
     const user = await db.users.findUnique({
-      where: { 
+      where: {
         phoneNumber: formattedPhoneNumber,
-        role: 'DELIVERY_PERSON'
-      }
+        role: "DELIVERY_PERSON",
+      },
     });
 
     if (!user) {
       res.status(400).json({
         success: false,
-        error: 'No delivery person found with this phone number'
+        error: "No delivery person found with this phone number",
       });
       return;
     }
@@ -300,7 +346,7 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
     if (user.banned) {
       res.status(403).json({
         success: false,
-        error: 'This account has been banned'
+        error: "This account has been banned",
       });
       return;
     }
@@ -308,32 +354,29 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
     // Forward the verification request to Better-Auth
     const response = await auth.api.verifyPhoneNumber({
       headers: fromNodeHeaders(req.headers),
-      body: { phoneNumber: formattedPhoneNumber, code }
+      body: { phoneNumber: formattedPhoneNumber, code },
     });
 
     if (!response?.token) {
       res.status(500).json({
         success: false,
-        error: 'Failed to verify code'
+        error: "Failed to verify code",
       });
       return;
     }
+    console.log("user's phone verification response: ", response);
 
     // Update user's phone verification status
     await db.users.update({
       where: { id: user.id },
-      data: { phoneNumberVerified: true }
+      data: { phoneNumberVerified: true },
     });
-
-    res.status(200).json({
-      success: true,
-      message: 'Phone number verified successfully'
-    });
+    res.status(200).json(response);
   } catch (error) {
-    console.error('Error verifying OTP:', error);
+    console.error("Error verifying OTP:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to verify code'
+      error: "Failed to verify code",
     });
   }
 };
@@ -341,36 +384,39 @@ export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
 /**
  * Set password for delivery person after phone verification
  */
-export const setDeliveryPersonPassword = async (req: Request, res: Response): Promise<void> => {
+export const setDeliveryPersonPassword = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { newPassword } = req.body;
 
     if (!newPassword) {
       res.status(400).json({
         success: false,
-        error: 'New password is required'
+        error: "New password is required",
       });
       return;
     }
 
     // Get the current session
     const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers)
+      headers: fromNodeHeaders(req.headers),
     });
 
     if (!session) {
       res.status(401).json({
         success: false,
-        error: 'Unauthorized: No valid session found'
+        error: "Unauthorized: No valid session found",
       });
       return;
     }
 
     // Verify user is a delivery person
-    if (session.user.role !== 'DELIVERY_PERSON') {
+    if (session.user.role !== "DELIVERY_PERSON") {
       res.status(403).json({
         success: false,
-        error: 'Forbidden: Only delivery persons can set their password'
+        error: "Forbidden: Only delivery persons can set their password",
       });
       return;
     }
@@ -378,18 +424,18 @@ export const setDeliveryPersonPassword = async (req: Request, res: Response): Pr
     // Set the new password
     await auth.api.setPassword({
       body: { newPassword },
-      headers: fromNodeHeaders(req.headers)
+      headers: fromNodeHeaders(req.headers),
     });
 
     res.status(200).json({
       success: true,
-      message: 'Password set successfully'
+      message: "Password set successfully",
     });
   } catch (error) {
-    console.error('Error setting delivery person password:', error);
+    console.error("Error setting delivery person password:", error);
     res.status(500).json({
       success: false,
-      error: 'Failed to set password'
+      error: "Failed to set password",
     });
   }
 };
