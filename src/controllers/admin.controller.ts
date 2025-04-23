@@ -195,8 +195,8 @@ export const registerDeliveryPerson = async (req: Request, res: Response): Promi
     }
 
     // Verify admin role
-    const userRole = session.user.role || '';
-    if (!['admin', 'superAdmin'].includes(userRole)) {
+    const userRole = (session.user.role || '').toLowerCase();
+    if (!['admin', 'superadmin'].includes(userRole)) {
       res.status(403).json({
         success: false,
         error: 'Forbidden: Only admins can register delivery persons'
